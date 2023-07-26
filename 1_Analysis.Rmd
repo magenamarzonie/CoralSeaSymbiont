@@ -1,0 +1,3045 @@
+---
+title: "1_Manuscript"
+author: "M.Marzonie, M. Nitschke"
+date: "2023-05-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Data
+
+### Load Libraries
+```{r, warning = FALSE, echo = FALSE}
+library(ggsci)
+library(tidyverse)
+library(dplyr)
+library(forcats)
+library(reshape2)
+library(stringr)
+library(tidyr)
+library(tibble)
+library(sangerseqR)
+library(DECIPHER)
+library(Biostrings)
+library(phangorn)
+library(ape)
+library(ggplot2)
+library(ggtree)
+library(patchwork)
+library(bioseq)
+library(kmer)
+library(GUniFrac)
+library(seqinr)
+library(vegan)
+library(corrplot)
+library(ggrepel)
+
+library(ggmsa)
+library(dendextend)
+library(usedist)
+```
+
+
+### Load Symbiont Data
+```{r, show_col_types = FALSE}
+#here is the raw SymPortal Data output that contains data for ITS2 type profiles and DIVs associated with all three coral species
+seqs <- read_tsv("0_SymPortal/186_20211115_03_DBV_20211116T024440.seqs.absolute.abund_and_meta.txt") %>%
+  mutate(plate = case_when(str_detect(sample_name, "Plate1") ~ "Plate1",
+                           str_detect(sample_name, "Plate2") ~ "Plate2",
+                           str_detect(sample_name, "Plate3") ~ "Plate3",
+                           str_detect(sample_name, "Plate4") ~ "Plate4",
+                           str_detect(sample_name, "Plate5") ~ "Plate5", 
+                           str_detect(sample_name, "Plate6") ~ "Plate6", 
+                           str_detect(sample_name, "Plate7") ~ "Plate7", 
+                           TRUE ~ "Other"),
+         position = str_sub(sample_name, start = 8, end = 11),
+         plate_position = paste0(plate, "_", position)) %>%
+  filter(!(is.na(sample_name))) %>%
+  select(sample_name = plate_position, `A1`:`1275234_G`) %>%
+  mutate(sample_name = as.factor(sample_name)) 
+```
+
+
+### Load Metadata
+```{r}
+#Vial is the unique genotype for each coral sample. 
+meta = read.csv("Metadata.csv") %>% 
+  mutate(sample_name = as.factor(sample_name)) %>% 
+  mutate(Vial = as.factor(Vial)) %>% 
+  mutate(DHW2020 = as.numeric(DHW2020))
+```
+
+
+### Load Custom Functions
+```{r}
+read_fasta_df <- function (file = "") {
+  fasta <- readLines(file)
+  ind <- grep(">", fasta)
+  s <- data.frame(ind = ind, from = ind + 1, to = c((ind - 
+    1)[-1], length(fasta)))
+  seqs <- rep(NA, length(ind))
+  for (i in 1:length(ind)) {
+    seqs[i] <- paste(fasta[s$from[i]:s$to[i]], collapse = "")
+  }
+  tib <- tibble(label = gsub(">", "", fasta[ind]), sequence = seqs)
+  return(tib)
+}
+
+write_fasta_df <- function (data, filename) 
+{
+    fastaLines = c()
+    for (rowNum in 1:nrow(data)) {
+        fastaLines = c(fastaLines, as.character(paste(">", 
+            data[rowNum, "label"], sep = "")))
+        fastaLines = c(fastaLines, as.character(data[rowNum, 
+            "sequence"]))
+    }
+    fileConn <- file(filename)
+    writeLines(fastaLines, fileConn)
+    close(fileConn)
+}
+
+dna_to_DNAbin <- function (dna){
+  DNAbin <- as_DNAbin(dna)
+  names(DNAbin) <- names(dna)
+  return(DNAbin)
+}
+dna_to_DNAStringset <- function(x) 
+{
+    bioseq:::check_dna(x)
+    DNAstr <- DNAStringSet(paste(x))
+    names(DNAstr) <- names(x)
+    return(DNAstr)
+}
+
+DNAStringSet_to_dna <- function(x){
+    x_dna <- as_dna(paste(x))
+    names(x_dna) <- names(x)
+    res <- tibble(label = names(x), sequence = x_dna)
+    return(res)
+}
+
+# Convert DNAstringset to DNAbin
+DNAStringSet_to_DNAbin <- function(DNAStringSet){
+  DNAbin <- as.DNAbin(DNAStringSet)
+  return(DNAbin)
+}
+
+# https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-018-2315-y
+palette <- c("A" = "#46ff2d", 
+             "G" = "#ffae01", 
+             "C" = "#f24641", 
+             "T" = "#4294fa", 
+             "K" = "#8b4816",
+             "M" = "#83831f",
+             "R" = "#ffff81",
+             "S" = "#ff9d80",
+             "Y" = "#e381f2",
+             "W" = "#80fff2",
+             "V" = "#fde4b8",
+             "B" = "#f9c1bf",
+             "H" = "#c0d9f9",
+             "D" = "#c7ffba",
+             "U" = "#8989fb",
+             "N" = "black", 
+             "-" = "white",
+             "+" = "White")
+
+
+pal_df <- data.frame(names = names(palette), col = palette)
+```
+
+### Combining sequence/metadata 
+```{r}
+# Convert to long format
+seqs_long <- seqs %>%
+  filter(!is.na(sample_name)) %>%
+  select(sample_name, `A1`:`1275234_G`) %>%
+  pivot_longer(`A1`:`1275234_G`) %>%
+  filter(value > 0) %>% # Remove zero values
+  left_join(., meta)
+
+# Q. Are we working with the post-med seqs according to the metadata in seqs?
+san_check <- seqs_long %>%
+  group_by(sample_name) %>%
+  summarise(total = sum(value)) #A. yes
+
+# Create a list of samples to keep that didnt fail to sequence
+keepers_ss <- san_check %>%
+  filter(total > 1500)
+
+non_keep <- san_check %>% 
+  filter(total < 1500)
+
+#we filter out 3 samples with less than 1500 reads: Plate4_B007, Plate5_G011, Plate7_D009
+
+# Filter out the failed samples
+seqs_long <- seqs_long %>%
+  filter(sample_name %in% keepers_ss$sample_name) %>%
+  group_by(sample_name) %>%
+  mutate(value_rel = value/sum(value)) %>% # Convert to relative abundance
+  ungroup() %>%
+  mutate(name = as.factor(name)) # Make sample names a factor
+
+# Create a random palette for each sequence
+n <- length(levels(seqs_long$name))
+seqs_pal = rainbow(n, s=.6, v=.9)[sample(1:n,n, replace = FALSE)]
+names(seqs_pal) <- levels(seqs_long$name)
+
+# Read in the profile data
+profiles_raw <- read_tsv("0_SymPortal/186_20211115_03_DBV_20211116T024440.profiles.absolute.abund_and_meta.txt", skip = 6) %>%
+    select(sample_name = `...2`, `A1/A1h`:`C42a/C1-C42.2`) %>%
+   mutate(plate = case_when(str_detect(sample_name, "Plate1") ~ "Plate1",
+                           str_detect(sample_name, "Plate2") ~ "Plate2",
+                           str_detect(sample_name, "Plate3") ~ "Plate3",
+                           str_detect(sample_name, "Plate4") ~ "Plate4",
+                           str_detect(sample_name, "Plate5") ~ "Plate5", 
+                           str_detect(sample_name, "Plate6") ~ "Plate6", 
+                           str_detect(sample_name, "Plate7") ~ "Plate7", 
+                           TRUE ~ "Other"),
+         position = str_sub(sample_name, start = 8, end = 11),
+         plate_position = paste0(plate, "_", position)) %>%
+    filter(!is.na(sample_name)) %>%
+  select(sample_name = plate_position, -plate, -position, `A1/A1h`:`C42a/C1-C42.2`)
+
+#Convert to long format 
+profiles_long <- profiles_raw %>%
+  pivot_longer(`A1/A1h`:`C42a/C1-C42.2`) %>% # Convert it to long format
+  mutate(name = paste0("p_", name)) %>% # Add a p_ to the beginning of each profile (Some profiles are single sequence profiles and clash with the Sequence names)
+  filter(sample_name %in% seqs_long$sample_name) %>% # Remove samples that dont appear in the Sequence dataframe
+  group_by(sample_name) %>%
+  mutate(value = as.numeric(value)) %>%
+  filter(value > 0) %>% # Remove 0 abundance profiles
+  mutate(sample_name = as.factor(sample_name),
+         name = as.factor(name)) %>% 
+  ungroup() %>%
+  left_join(., meta) # Add in metadata
+
+# What is the total number of profile-related sequences in each sample?
+profiles_sum <- profiles_long %>%
+  group_by(sample_name) %>%
+  summarise(total = sum(value))
+
+# How many sequences in each sample are not part of a profile?
+residual <- left_join(profiles_sum, san_check, by = "sample_name") %>%
+  mutate(residual = total.y - total.x) %>%
+  select(sample_name, value = residual) %>%
+  mutate(name = "non-profile sequences") %>%
+  left_join(., meta)
+
+# Combine the profiles and non-profile sequences
+profile_data <- rbind(profiles_long, residual) %>%
+  group_by(sample_name) %>%
+  mutate(value_rel = value/sum(value)) # convert to relative abundance - in that sample 
+
+# Create palette for profiles (this is a darker palette)
+n <- length(levels(profile_data$name))
+profile_pal = rainbow(n, s=.6, v=.6)[sample(1:n,n, replace = FALSE)]
+names(profile_pal) <- levels(profile_data$name)
+
+# Merge the palettes and replace the non-profile sequences with grey
+all_pal <- c(seqs_pal, profile_pal)
+all_pal['non-profile sequences'] <- "#808080" 
+
+# Join profiles and sequence data together into single dataframe and add more metadata
+all_data <- rbind(seqs_long, profile_data) %>%
+  mutate(coral_genus = case_when(str_detect(mtORF, "mean|verru|aplo|nkno") ~ "Pocillopora",
+                                 str_detect(mtORF, "humil") ~ "Acropora",
+                                 TRUE ~ "check"))
+
+all_data %>% filter(coral_genus != "Acropora") %>% distinct(sample_name)
+```
+
+# 1 Library Stats
+
+##1.1 Basic Stats
+```{r}
+# How many samples per species?
+all_data %>%
+  distinct(sample_name, mtORF) %>%
+  group_by(mtORF) %>% 
+  summarise(total_samples = n())
+
+# Ahumilis	260			
+# Haplotype8a	39			
+# Pmeandrina	133			
+# Pverrucosa	152			
+# Unknown	22
+
+humil_total <- 260
+hap8a_total <- 39
+veru_total <- 152
+mean_total <- 133
+
+#remove unknowns from downstream analysis
+clean_data <- all_data %>%
+  filter(mtORF != "Unknown")
+
+# Total number of sequences (for whole library)? 
+study_total <- clean_data %>% 
+   filter(!(str_detect(name, "p_")),
+         name != "non-profile sequences") %>% 
+  summarise(total_seqs = sum(value)) %>%
+  pull(total_seqs)
+#15,336,586 total 	
+
+#Total number of sequences (per species)? 
+clean_data %>%
+    filter(!(str_detect(name, "p_")),
+         name != "non-profile sequences") %>% 
+  group_by(mtORF) %>%
+  summarise(total_seqs = sum(value))
+
+# Ahumilis	6627245			
+# Haplotype8a	1025443			
+# Pmeandrina	3512508			
+# Pverrucosa	4171390	
+```
+
+
+##1.2 Sequencing Depth
+```{r}
+# Average per sample sequencing depth? (per coral host genus, and per coral species)
+
+# Average per sample across all spp
+clean_data %>%
+  group_by(sample_name) %>% 
+  dplyr::summarise(per_sample = sum(value)) %>%
+  dplyr::summarise(mean_all = mean(per_sample))
+# Across all:  52522.55	
+
+#average per sample per coral host genus 
+clean_data %>%
+  group_by(coral_genus, sample_name) %>% 
+  summarise(per_sample = sum(value)) %>%
+  summarise(mean_all = mean(per_sample), n = n())
+# Acropora	50978.81	260		
+# Pocillopora	53761.36	324	
+
+
+#average per sample per coral host species 
+clean_data %>% 
+  group_by(mtORF, sample_name) %>% 
+  summarise(per_sample = sum(value)) %>%
+  summarise(mean_all = mean(per_sample), n = n())
+# Species
+# Ahumilis	50978.81	260		
+# Haplotype8a	52586.82	39		
+# Pmeandrina	52819.67	133		
+# Pverrucosa	54886.71	152		
+```
+
+##1.3 Number of sequences per symbiont genus 
+```{r}
+# Total number of Cladocopium 
+clean_data %>%
+  filter(!(str_detect(name, "p_")), name != "non-profile sequences") %>%
+  filter(str_sub(name, 1, 1) == "C" | str_detect(name, "_C")) %>% 
+  summarise(sum = sum(value))
+# 15335016	
+
+(15335016 / study_total) * 100 # 99.98976 Clado
+
+#Total number of Symbiodinium
+clean_data %>%
+  filter(!(str_detect(name, "p_")), name != "non-profile sequences") %>%
+  filter(str_sub(name, 1, 1) == "A" | str_detect(name, "_A")) %>% 
+  summarise(sum = sum(value)) 
+# 1552	total seqs
+(1552 / study_total) * 100 # 0.01011959 Symbio
+
+
+# Total number of Durusdinium sequences
+clean_data %>%
+  filter(!(str_detect(name, "p_")), name != "non-profile sequences") %>%
+  filter(str_sub(name, 1, 1) == "D" | str_detect(name, "_D")) %>% 
+  summarise(sum = sum(value)) 
+# 13 total reads
+
+(13 / study_total) * 100 # 8.476463e-05 Durusdinium
+
+```
+
+##1.4 Characteristics of symbiont DIVs and Type Profiles 
+```{r}
+# general statements that apply to both species 
+
+# what proportion of each sample are composed of non-profile sequences (grouped by coral host species)
+clean_data %>%
+  filter(str_detect(name, "non")) %>%
+  group_by(mtORF) %>%
+  summarise(mean = mean(value_rel))
+
+# Ahumilis	0.2454587			
+# Haplotype8a	0.1763951			
+# Pmeandrina	0.1792804			
+# Pverrucosa	0.1393484	
+
+
+#proportion of non-profile sequences for each genus 
+clean_data %>%
+  filter(str_detect(name, "non")) %>%
+  group_by(coral_genus) %>%
+  summarise(mean = mean(value_rel))
+
+# Acropora	0.2454587			
+# Pocillopora	0.1601996	
+
+# Acropora has a lot more non-profile sequences than any Pocillopora. 
+```
+
+
+##1.5 Total number of Type Profiles 
+```{r}
+library(tidyverse)
+
+#total type profiles across Pocilloporidae 
+clean_data %>%
+  filter(coral_genus == "Pocillopora") %>% 
+  filter(str_detect(name, "p_")) %>%    #profiles start with p_
+  group_by(name) %>%
+  dplyr:: count() %>%
+  dplyr:: arrange(desc(n)) %>%
+  ungroup() %>%
+  mutate(prop = n/sum(n)) %>%
+  mutate(cumulative_sum = cumsum(prop))
+
+# profile n_samps prop_samps cumulative_sum
+# p_C1/C42.2/C42g/C42a-C1b-C1au-C1az-C42h-C3	97	0.295731707	0.2957317	
+# p_C1d/C1/C42.2/C3-C1b-C3cg-C115k-C45c-C1au-C41p	71	0.216463415	0.5121951	
+# p_C1/C42.2/C42u-C1b-C42a-C1au-C115l-C1az-C115d	43	0.131097561	0.6432927	
+# p_C1d/C1/C42.2-C3cg-C1b-C45c-C115k-C1au	36	0.109756098	0.7530488	
+# p_C1d/C1/C1ba-C42.2-C3cg-C1b-C115k	13	0.039634146	0.7926829	
+# p_C42u/C42a/C1/C42.2/C42b-C1b-C1au	11	0.033536585	0.8262195	
+# p_C42.2/C1dh/C1/C1d-C1b-C3cg	9	0.027439024	0.8536585	
+# p_C42.2/C1/C42a/C1b-C1au-C1az-C3-C115d	6	0.018292683	0.8719512	
+# p_C1ag/C1/C1ah-C42.2-C3cg-C1b	6	0.018292683	0.8902439	
+# p_C42g/C42a/C42.2/C1-C42h-C42b-C1b-C1au	5	0.015243902	0.9054878	
+# p_C1d-C42.2-C1-C1k-C1b-C3cg	5	0.015243902	0.9207317	
+# p_C42.2/C1/C42a-C1b-C42g-C42b-C1au-C1az	5	0.015243902	0.9359756	
+# p_C1ag/C1/C42.2-C3cg-C1b-C1bi	4	0.012195122	0.9481707	
+# p_C1ag-C1-C42.2-C1bi-C3cg-C1b-C1bk	2	0.006097561	0.9542683	
+# p_C1d/C15h-C1-C42.2	2	0.006097561	0.9603659	
+# p_C42u-C1-C42.2-C42a-C1b-C1au-C115k-C115d	2	0.006097561	0.9664634	
+# p_C1ag/C1/C42.2/C1bi-C3cg-C1b-C3cw-C45c	2	0.006097561	0.9725610	
+# p_C3-C3k	1	0.003048780	0.9756098	
+# p_C42g-C42.2-C1-C1b-C42h-C42a-C42ba-C42b	1	0.003048780	0.9786585	
+# p_C42a/C1/C42.2/C1b/C1j-C1au-C3-C115l	1	0.003048780	0.9817073	
+# p_A1/A1h	1	0.003048780	0.9847561	
+# p_C15h	1	0.003048780	0.9878049	
+# p_C1ag/C1-C42.2-C3cg-C1b	1	0.003048780	0.9908537	
+# p_C1d	1	0.003048780	0.9939024	
+# p_C1ag/C1-C1m-C42.2-C1lr-C1bi-C3cg	1	0.003048780	0.9969512	
+# p_C1/C42.2/C42g/C42a-C1b-C1az-C3-C1au	1	0.003048780	1.0000000	
+
+#total number of profiles, in order of highest abundance across P. verrucosa samples 
+clean_data %>%
+  filter(mtORF == "Pverrucosa") %>% 
+  filter(str_detect(name, "p_")) %>%    #profiles start with p_
+  group_by(name) %>%
+  dplyr:: count() %>%
+  dplyr:: arrange(desc(n)) %>%
+  ungroup() %>%
+  mutate(prop = n/sum(n)) %>%
+  mutate(cumulative_sum = cumsum(prop))
+
+verru_pros <- 22
+
+# p_C1d/C1/C42.2/C3-C1b-C3cg-C115k-C45c-C1au-C41p	71	0.461038961	0.4610390	
+# p_C1d/C1/C42.2-C3cg-C1b-C45c-C115k-C1au	36	0.233766234	0.6948052	
+# p_C1d/C1/C1ba-C42.2-C3cg-C1b-C115k	13	0.084415584	0.7792208	
+# p_C42.2/C1dh/C1/C1d-C1b-C3cg	8	0.051948052	0.8311688	
+# p_C1ag/C1/C1ah-C42.2-C3cg-C1b	6	0.038961039	0.8701299	
+# p_C1d-C42.2-C1-C1k-C1b-C3cg	5	0.032467532	0.9025974	
+# p_C1ag/C1/C42.2-C3cg-C1b-C1bi	4	0.025974026	0.9285714	
+# p_C1ag-C1-C42.2-C1bi-C3cg-C1b-C1bk	2	0.012987013	0.9415584	
+# p_C1d/C15h-C1-C42.2	2	0.012987013	0.9545455	
+# p_C1/C42.2/C42g/C42a-C1b-C1au-C1az-C42h-C3	1	0.006493506	0.9610390	
+# p_C1/C42.2/C42u-C1b-C42a-C1au-C115l-C1az-C115d	1	0.006493506	0.9675325	
+# p_C3-C3k	1	0.006493506	0.9740260	
+# p_C1ag/C1-C42.2-C3cg-C1b	1	0.006493506	0.9805195	
+# p_C1d	1	0.006493506	0.9870130	
+# p_C1ag/C1/C42.2/C1bi-C3cg-C1b-C3cw-C45c	1	0.006493506	0.9935065	
+# p_C1ag/C1-C1m-C42.2-C1lr-C1bi-C3cg	1	0.006493506	1.0000000	
+
+clean_data %>%
+  filter(mtORF == "Pmeandrina") %>% 
+  filter(str_detect(name, "p_")) %>%
+  group_by(name) %>%
+  dplyr:: count() %>%
+  dplyr:: arrange(desc(n)) %>%
+  ungroup() %>%
+  mutate(prop = n/sum(n)) %>%
+  mutate(cumulative_sum = cumsum(prop))
+
+mean_pros <- 12
+
+# p_C1/C42.2/C42g/C42a-C1b-C1au-C1az-C42h-C3	74	0.548148148	0.5481481	
+# p_C1/C42.2/C42u-C1b-C42a-C1au-C115l-C1az-C115d	33	0.244444444	0.7925926	
+# p_C42u/C42a/C1/C42.2/C42b-C1b-C1au	9	0.066666667	0.8592593	
+# p_C42.2/C1/C42a/C1b-C1au-C1az-C3-C115d	5	0.037037037	0.8962963	
+# p_C42.2/C1/C42a-C1b-C42g-C42b-C1au-C1az	5	0.037037037	0.9333333	
+# p_C42g/C42a/C42.2/C1-C42h-C42b-C1b-C1au	3	0.022222222	0.9555556	
+# p_C42g-C42.2-C1-C1b-C42h-C42a-C42ba-C42b	1	0.007407407	0.9629630	
+# p_C42a/C1/C42.2/C1b/C1j-C1au-C3-C115l	1	0.007407407	0.9703704	
+# p_A1/A1h	1	0.007407407	0.9777778	
+# p_C15h	1	0.007407407	0.9851852	
+# p_C42.2/C1dh/C1/C1d-C1b-C3cg	1	0.007407407	0.9925926	
+# p_C1ag/C1/C42.2/C1bi-C3cg-C1b-C3cw-C45c	1	0.007407407	1.0000000	
+
+clean_data %>%
+  filter(mtORF == "Haplotype8a") %>% 
+  filter(str_detect(name, "p_")) %>%    #profiles start with p_
+  group_by(name) %>%
+  dplyr:: count() %>%
+  dplyr:: arrange(desc(n)) %>%
+  ungroup() %>%
+  mutate(prop = n/sum(n)) %>%
+  mutate(cumulative_sum = cumsum(prop))
+
+hap8a_pros <- 7
+
+# p_C1/C42.2/C42g/C42a-C1b-C1au-C1az-C42h-C3	22	0.56410256	0.5641026	
+# p_C1/C42.2/C42u-C1b-C42a-C1au-C115l-C1az-C115d	9	0.23076923	0.7948718	
+# p_C42u/C42a/C1/C42.2/C42b-C1b-C1au	2	0.05128205	0.8461538	
+# p_C42g/C42a/C42.2/C1-C42h-C42b-C1b-C1au	2	0.05128205	0.8974359	
+# p_C42u-C1-C42.2-C42a-C1b-C1au-C115k-C115d	2	0.05128205	0.9487179	
+# p_C42.2/C1/C42a/C1b-C1au-C1az-C3-C115d	1	0.02564103	0.9743590	
+# p_C1/C42.2/C42g/C42a-C1b-C1az-C3-C1au	1	0.02564103	1.0000000	
+
+clean_data %>%
+  filter(mtORF == "Ahumilis") %>% 
+  filter(str_detect(name, "p_")) %>%    #profiles start with p_
+  group_by(name) %>%
+  dplyr:: count() %>%
+  dplyr:: arrange(desc(n)) %>%
+  ungroup() %>%
+  mutate(prop = n/sum(n)) %>%
+  mutate(cumulative_sum = cumsum(prop))
+
+humil_pros <- 23
+
+# p_C3k/C3-C50a-C29-C21ab-C3b	160	0.592592593	0.5925926	
+# p_C3k/C3-C50a-C21ab-C50f-C3ba-C3dq	52	0.192592593	0.7851852	
+# p_C3k/C3-C50a-C3ba-C50f-C3dq-C21-C3a	14	0.051851852	0.8370370	
+# p_C3k/C3-C50a-C3jv-C3vx-C3vy	12	0.044444444	0.8814815	
+# p_C3bo/C3k-C3-C3bp-C50a-C29	6	0.022222222	0.9037037	
+# p_C3k/C3/C1-C50a-C21ab	4	0.014814815	0.9185185	
+# p_C3k-C3-C50a-C21ab-C3b	3	0.011111111	0.9296296	
+# p_C3k-C3-C50a-C21ab-C50f-C3ba	2	0.007407407	0.9370370	
+# p_C1/C42.2	2	0.007407407	0.9444444	
+# p_C1/C1c	2	0.007407407	0.9518519	
+# p_C1/C42.2/C42g/C42a-C1b-C1au-C1az-C42h-C3	1	0.003703704	0.9555556	
+# p_A1	1	0.003703704	0.9592593	
+# p_C3/C3k-C29-C21ab-C3b-C3gj-C21.12	1	0.003703704	0.9629630	
+# p_C3-C21-C3k-C3at-C3b-C3av-C3dp	1	0.003703704	0.9666667	
+# p_C40/C1-C3-C115	1	0.003703704	0.9703704	
+# p_C42.2/C42a/C1-C1b	1	0.003703704	0.9740741	
+# p_C1d/C1	1	0.003703704	0.9777778	
+# p_C1/C3k-C1b-C3-C42.2-C1bh-C1br	1	0.003703704	0.9814815	
+# p_C3/C21/C3av-C3at-C3b-C3dp	1	0.003703704	0.9851852	
+# p_C3k-C50a-C3cz	1	0.003703704	0.9888889	
+# p_C42a/C1-C42.2	1	0.003703704	0.9925926	
+# p_C1/C3-C1c-C1b-C1w	1	0.003703704	0.9962963	
+# p_C3k/C50a	1	0.003703704	1.0000000		
+```
+
+##1.6 Type profile proportions
+```{r}
+#What is the proportion of samples that had 1 and 2 type profiles?
+
+clean_data %>% 
+ filter(coral_genus == "Pocillopora") %>% 
+ filter(str_detect(name, "p_")) %>%
+ group_by(sample_name) %>% 
+ summarise(n = n()) %>% 
+ filter(n == 1)     #320  samples have 1 type profile
+ #filter(n == 2)     #4 samples have 2 type profiles
+
+clean_data %>% 
+  filter(coral_genus == "Acropora") %>% 
+  filter(str_detect(name, "p_")) %>%
+  group_by(sample_name) %>% 
+  summarise(n = n()) %>% 
+ #filter(n == 1)     #250 samples have 1 type profile
+ filter(n == 2)     #10 samples have 2 type profiles 
+```
+
+##1.7 Majority Sequences 
+```{r}
+#pverrucosa 
+clean_data %>% 
+  filter(mtORF == "Pverrucosa") %>% 
+  filter(str_detect(name, c("p_"))) %>% 
+  filter(str_detect(name, c("p_C1d")))
+
+128 / veru_total 
+#found as majority sequence in 84.2% of P. verrucosa samples 
+
+
+#p.mea/haplotype 8a 
+clean_data %>% 
+ filter(mtORF == "Pmeandrina" | mtORF == "Haplotype8a") %>% 
+ filter(str_detect(name, c("p_"))) %>% 
+ filter(str_detect(name, c("p_C1|p_C42.2"))) 
+
+#153 /(mean_total + hap8a_total) # 0.8895349
+
+#acropora 
+clean_data %>% 
+  filter(mtORF == "Ahumilis") %>% 
+    filter(str_detect(name, c("p_"))) %>% 
+    filter(str_detect(name, c("p_C3k|p_C3"))) #%>% 
+ # summarise(mean = mean(value_rel))      #for relative proportion
+
+#258 / humil_total
+#C3k/C3 is majority sequence in 0.9923077 of all samples 
+```
+##1.8 Depth Range
+```{r}
+#depth range and average/sd
+meta %>% dplyr::select(c(Vial, Reef, mtORF, Lat, Depth)) %>% 
+  filter(mtORF != "Unknown") %>% 
+group_by(Vial) %>% 
+  summarise(depth = mean(Depth)) %>% 
+  summarise(sdvar = sd(depth))
+
+meta %>% dplyr::select(c(Vial, Reef, mtORF, Lat, Depth)) %>% 
+  filter(mtORF != "Unknown") %>% 
+  group_by(mtORF) %>% 
+  summarise(mindepth = min(Depth)) 
+
+meta %>% dplyr::select(c(Vial, Reef, mtORF, Lat, Depth)) %>% 
+  filter(mtORF != "Unknown") %>% 
+  group_by(mtORF) %>% 
+  summarise(maxdepth = max(Depth)) 
+
+```
+
+##Table S1.
+```{r}
+#How many samples collected from each reef, for each type of coral species? 
+meta %>% dplyr::select(c(Vial, Reef, mtORF, Lat)) %>% 
+  filter(mtORF != "Unknown") %>% 
+  group_by(Reef, mtORF) %>% 
+  summarise(total_samples = n()) %>%
+  pivot_wider(names_from = mtORF, values_from = total_samples)
+```
+
+
+# 2 UPGMA Stats
+```{r}
+#filter out non-profile sequences
+seq_data <- clean_data %>% 
+  filter(!str_detect(name, "non")) %>% 
+  filter(!str_detect(name, "p_"))
+  
+#creating an object for each species 
+poci_seqs <- seq_data %>% filter(coral_genus == "Pocillopora")
+pver_seqs <- seq_data %>% filter(str_detect(mtORF, "Pverrucosa"))
+pmh8_seqs <- seq_data %>% filter(str_detect(mtORF, "Pmeandrina|Haplotype8a"))
+acro_seqs <- seq_data %>% filter(str_detect(mtORF, "Ahumilis"))
+
+#colour palette
+# Merge the palettes and replace the non-profile sequences with grey
+all_pal <- c(seqs_pal, profile_pal)
+all_pal['non-profile sequences'] <- "#808080" 
+```
+
+
+## 2.1 Poci UPGMA Tree
+```{r}
+
+meta_mtorf <- read.csv("Metadata_mtorf.csv")
+#read in file 
+fasta_poci <- read_fasta_df("0_SymPortal/186_20211115_03_DBV_20211116T024440.seqs.fasta") %>%
+  filter(label %in% poci_seqs$name) %>%   #only keeping DNA seqs that appear in seqs_long subset 
+  filter(!str_detect(label, "A|G")) %>%
+  deframe() %>%
+  as_dna()
+
+#creating the tree
+kdist_poci <- fasta_poci %>%
+  dna_to_DNAbin() %>%
+  kdistance(k = 7, residues = "DNA", method = "edgar") %>%
+  as.matrix()
+
+k_tree_poci <- kdist_poci %>% phangorn::upgma()
+
+seqs_wide_poci <- poci_seqs %>%
+  dplyr::select(Vial, name, value) %>%
+  filter(!str_detect(name, "A|G")) %>%
+  pivot_wider(names_from = name, values_from = value, values_fill = 0) %>%
+  tibble::column_to_rownames(var = "Vial")
+
+k_unidist_poci <- GUniFrac(seqs_wide_poci, k_tree_poci)   #GUniFrac calculates all the distances 
+k_unidist_poci <- k_unidist_poci$unifracs
+
+du_poci <- k_unidist_poci[, , "d_0.5"]    # GUniFrac with alpha 0.5 
+dist_poci <- as.dist(du_poci, diag = FALSE)
+
+# Cluster the samples
+hclust_samps_poci <- upgma(du_poci)
+
+# Make the sample tree
+tree_poci <- ggtree(hclust_samps_poci, size = 0.2) +
+  theme(aspect.ratio = 0.3)
+
+# Get a sample order from ggtree
+poci_sample_order <- tree_poci$data %>% filter(isTip == "TRUE") %>%
+  arrange(y) %>%
+  pull(label)
+
+pocimat <- meta_mtorf %>% filter(Vial %in% tree_poci$data$label) %>%
+  select(Vial, RFLP = Species, mtORF) %>%
+  mutate(RFLP = case_when(RFLP == "Pmeandrina" ~ "P. meandrina",
+                          RFLP == "Pverrucosa" ~ "P. verrucosa", TRUE ~ RFLP),
+         mtORF = case_when(mtORF == "Pmeandrina" ~ "P. meandrina",
+                           mtORF == "Pverrucosa" ~ "P. verrucosa", TRUE ~ mtORF)) %>%
+  tibble::column_to_rownames(var = "Vial")
+
+poci_tree_mat <- gheatmap(tree_poci, pocimat, colnames = T, width=.1, offset = -0.26)
+poci_tree_mat <- poci_tree_mat + scale_fill_d3(palette = "category10", na.value = "grey90") + layout_dendrogram() + theme(legend.position = "left")
+
+# Start plotting the composition data
+plot_df_poci <- clean_data %>%
+  filter(coral_genus == "Pocillopora") %>%
+  mutate(Vial = fct_relevel(Vial, poci_sample_order))
+
+theme_set(theme_bw())
+
+# find the likely distinguishing seqs in here
+test_df <- pver_seqs %>%
+   group_by(name) %>%
+   summarise(mean = mean(value_rel), n = n()) %>%
+   arrange(desc(n), desc(mean))
+
+# colour them black to check
+test_pal <- all_pal
+#test_pal['p_C1ag/C1/C42.2/C1bi-C3cg-C1b-C3cw-C45c'] <- "#000000" 
+
+```
+
+## Fig 2A
+```{r}
+bar_uni_poci <- 
+ggplot(plot_df_poci, aes(Vial, value_rel)) +
+geom_bar(stat = "identity", aes(fill = name, colour = name)) +
+theme(aspect.ratio = 0.5, legend.position = "none", axis.text.y=element_blank(), axis.ticks.y = element_blank(),
+      axis.text.x=element_blank(), axis.ticks.x = element_blank(),
+      axis.title.x = element_blank(), axis.title.y = element_blank(),
+      panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.ticks = element_blank()) +
+scale_fill_manual(values = all_pal, breaks = levels(profile_data$name)) +
+scale_colour_manual(values = all_pal, breaks = levels(profile_data$name)) +
+geom_hline(yintercept = 1, linewidth = 1) +
+guides(fill=guide_legend(ncol=2))
+
+bar_uni_poci 
+
+
+#p_bar_uni is the sequences by colour. P_tree_tip is the tree coloured by reef.
+
+poci_tree_mat / bar_uni_poci
+```
+
+
+## 2.1.2 Pver distance matrix
+```{r}
+fasta_pver <- read_fasta_df("0_SymPortal/186_20211115_03_DBV_20211116T024440.seqs.fasta") %>%
+  filter(label %in% pver_seqs$name) %>%   #only keeping DNA seqs that appear in seqs_long subset 
+  filter(!str_detect(label, "A|G")) %>%
+  deframe() %>%
+  as_dna()
+
+#creating the tree
+kdist_pver <- fasta_pver %>%
+  dna_to_DNAbin() %>%
+  kdistance(k = 7, residues = "DNA", method = "edgar") %>%
+  as.matrix()
+
+k_tree_pver <- kdist_pver %>% phangorn::upgma()
+
+seqs_wide_pver <- pver_seqs %>%
+  dplyr::select(Vial, name, value) %>%
+  filter(!str_detect(name, "A|G")) %>%
+  pivot_wider(names_from = name, values_from = value, values_fill = 0) %>%
+  tibble::column_to_rownames(var = "Vial")
+
+k_unidist_pver <- GUniFrac(seqs_wide_pver, k_tree_pver)   #GUniFrac calculates all the distances 
+k_unidist_pver <- k_unidist_pver$unifracs
+
+du_pver <- k_unidist_pver[, , "d_0.5"]    # GUniFrac with alpha 0.5 
+dist_pver <- as.dist(du_pver, diag = FALSE)
+```
+
+##2.1.3 Pmea distance matrix
+```{r}
+#we need individual distance matrices for each species for downstream dbRDA 
+fasta_pmh8 <- read_fasta_df("0_SymPortal/186_20211115_03_DBV_20211116T024440.seqs.fasta") %>%
+  filter(label %in% pmh8_seqs$name) %>%   #only keeping DNA seqs that appear in seqs_long subset 
+  filter(!str_detect(label, "A|G")) %>%
+  deframe() %>%
+  as_dna()
+
+#creating the tree
+kdist_pmh8 <- fasta_pmh8 %>%
+  dna_to_DNAbin() %>%
+  kdistance(k = 7, residues = "DNA", method = "edgar") %>%
+  as.matrix()
+
+k_tree_pmh8 <- kdist_pmh8 %>% phangorn::upgma()
+
+seqs_wide_pmh8 <- pmh8_seqs %>%
+  dplyr::select(Vial, name, value) %>%
+  filter(!str_detect(name, "A|G")) %>%
+  pivot_wider(names_from = name, values_from = value, values_fill = 0) %>%
+  tibble::column_to_rownames(var = "Vial")
+
+k_unidist_pmh8 <- GUniFrac(seqs_wide_pmh8, k_tree_pmh8)   # GUniFrac calculates all the distances 
+k_unidist_pmh8 <- k_unidist_pmh8$unifracs
+
+du_pmh8 <- k_unidist_pmh8[, , "d_0.5"]    # GUniFrac with alpha 0.5 
+dist_pmh8 <- as.dist(du_pmh8, diag = FALSE)
+```
+
+
+#2.2 Acro UPGMA Tree
+
+**OBSERVATIONS: Regardless of the tree-type and unifrac combination, there is one major branch point in the tree. While this does not seem to be consistent with lat/lon, the unweighted approach seems very good at placing samples from the same lat/lons together.**
+
+```{r}
+#read in file 
+fasta_acro <- read_fasta_df("0_SymPortal/186_20211115_03_DBV_20211116T024440.seqs.fasta") %>%
+  filter(label %in% acro_seqs$name) %>%   #only keeping DNA seqs that appear in seqs_long subset 
+  filter(str_sub(label, 1, 1) == "C" | str_detect(label, "_C")) %>%
+  deframe() %>%
+  as_dna()
+
+# Unifracs With a kmer-based tree
+kdist_acro <- fasta_acro %>%
+  dna_to_DNAbin() %>%
+  kdistance(k = 7, residues = "DNA", method = "edgar") %>%
+  as.matrix()
+
+k_tree_acro <- kdist_acro %>% phangorn::upgma()
+
+# Get the community matrix
+seqs_wide_acro <- acro_seqs %>%
+  dplyr::select(Vial, name, value) %>%
+  filter(str_sub(name, 1, 1) == "C" | str_detect(name, "_C")) %>%
+  pivot_wider(names_from = name, values_from = value, values_fill = 0) %>%
+  tibble::column_to_rownames(var = "Vial")
+
+# compute unifrac distances  
+k_unidist_acro <- GUniFrac(seqs_wide_acro, k_tree_acro)   #GUniFrac calculates all the distances 
+k_unidist_acro <- k_unidist_acro$unifracs
+
+ # GUniFrac with alpha 0.5 (i.e Generalised UniFrac Distance)
+du_acro <- k_unidist_acro[, , "d_0.5"]   
+dist_acro <- as.dist(du_acro, diag = FALSE)
+
+# Cluster the samples
+hclust_samps_acro <- upgma(du_acro)
+
+# Make the sample tree
+tree_acro <- ggtree(hclust_samps_acro, size = 0.2) +
+  theme(aspect.ratio = 0.3) + layout_dendrogram()
+
+# Get a sample order from ggtree
+acro_sample_order <- tree_acro$data %>% filter(isTip == "TRUE") %>%
+  arrange(y) %>%
+  pull(label)
+
+# Start plotting the composition data
+plot_df_acro <- clean_data %>%
+  filter(str_detect(Species, "Ahumilis")) %>%
+  mutate(Vial = fct_relevel(Vial, acro_sample_order))
+
+theme_set(theme_bw())
+
+
+# find the likely distinguishing seqs in here
+test_df <- acro_seqs %>%
+   group_by(name) %>%
+   summarise(mean = mean(value_rel), n = n()) %>%
+   arrange(desc(n), desc(mean))
+
+# colour them black to check
+ test_pal <- all_pal
+# test_pal['C21ab'] <- "#000000" 
+```
+
+
+## Fig 2B
+```{r}
+bar_uni_acro <- 
+ggplot(plot_df_acro, aes(Vial, value_rel)) +
+geom_bar(stat = "identity", aes(fill = name, colour = name)) +
+theme(aspect.ratio = 0.5, legend.position = "none", axis.text.y=element_blank(), axis.ticks.y = element_blank(),
+      axis.text.x=element_blank(), axis.ticks.x = element_blank(),
+      axis.title.x = element_blank(), axis.title.y = element_blank(),
+      panel.border = element_blank(), panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(), axis.ticks = element_blank()) +
+scale_fill_manual(values = all_pal, breaks = levels(profile_data$name)) +
+scale_colour_manual(values = all_pal, breaks = levels(profile_data$name)) +
+geom_hline(yintercept = 1, size = 1) +
+guides(fill=guide_legend(ncol=2))
+
+#p_bar_uni is the sequences by colour. P_tree_tip is the tree coloured by reef. 
+
+tree_acro / bar_uni_acro
+```
+
+
+### 2.2.2 K groups for Acropora 
+```{r}
+#there is clear division of symbiont communities. we will identify which k-group and then see how non-profile sequences vary between the two groups - which seems to be the predominant feature in the split. 
+
+# Cluster the samples
+hclust_samps_acro <- upgma(du_acro)
+
+# Get a sample order from ggtree
+ggtree_samps_acro <- ggtree::ggtree(hclust_samps_acro)$data %>%
+  filter(isTip == "TRUE") %>%
+  arrange(y)
+
+# Make the sample tree
+tree_acro <- ggtree(hclust_samps_acro, size = 0.2) +
+  scale_x_reverse() +
+  theme(aspect.ratio = 4)
+
+```
+
+###2.2.3 Extracting Kgroups Acro
+```{r}
+library(dendextend)
+
+#here we are taking the output of the upgma for acropora which clusters samples by unifrac distance and putting it into 'cutree' 
+#k value is how many groups you want membership for. We need to set k to 10 because each of the outliers form their own distinct k groups. 
+cu_acro <- cutree(hclust_samps_acro, k = 10)
+#cutree gives a named vector with sample sames and their membership to groups (1-8 in this case)
+
+hclust_samps_acro %>% 
+  as.dendrogram() %>% 
+  set("branches_k_color", k = 10, value = pal_d3("category10")(10)) %>% 
+  plot(main = "Group membership")
+
+
+grouplist_acro <- enframe(cu_acro) %>% 
+  dplyr::rename(kgroup = value) %>% 
+  dplyr::rename(sample_name = name)
+
+#save(grouplist_acro, file = "Data/grouplist_acro.RData")
+#change value to k group. add to metadata 
+
+#k-group stats for acropora (k groups 1 and 2)
+#joining clean data with the kgroups for acropora 
+clean_data <- left_join(clean_data, grouplist_acro)
+
+#save(clean_data, file = "clean_data.RData")
+
+#differences in k-group non-profile sequences 
+clean_data %>%
+  filter(str_detect(name, "non")) %>%
+  filter(coral_genus == "Acropora") %>% 
+  group_by(kgroup) %>%
+ # summarise(mean = mean(value_rel)) #%>% 
+  summarise(n =n()) 
+
+#non-profile abundance in the two difference clusters (1 = left side of tree, 2 = right side of tree)
+# kgroup1	0.20711430			
+# kgroup2	0.29029638
+
+t_df <- clean_data %>%
+  filter(str_detect(name, "non")) %>%
+  filter(coral_genus == "Acropora") %>% 
+  filter(kgroup == 1 | kgroup  == 2)
+
+#t_df %>% 
+  #rstatix::t_test(value_rel ~ kgroup)
+```
+
+
+# 3 Marker alignment psbAncr
+```{r}
+#psba txt files forward and reverse
+f_all <- sort(list.files(path = "psba txt files/", pattern = "Forw.txt", full.names = TRUE))
+
+r_all <- sort(list.files(path = "psba txt files/", pattern = "Rev.txt", full.names = TRUE))
+
+
+f_all_fasta <- f_all %>%
+  map(read_fasta_df) %>% # read in all the files
+  purrr::reduce(rbind) # reduce with rbind into one dataframe
+
+r_all_fasta <- r_all %>%
+  map(read_fasta_df) %>% # read in all the files
+  purrr::reduce(rbind) # reduce with rbind into one dataframe
+```
+
+## 3.1 Trimming parameters psba
+```{r}
+# apply the trimming parameters to start and end of the sequences to improve consensus
+
+f_all_fasta_sub <- f_all_fasta %>%
+  mutate(sequence = case_when(str_detect(label, "psba1_A12") ~ str_sub(sequence, start = 30, end = 550),
+                              str_detect(label, "psba1_B02") ~ str_sub(sequence, start = 30, end = 700),
+                              str_detect(label, "psba1_B07") ~ str_sub(sequence, start = 30, end = 600),
+                              str_detect(label, "psba1_B09") ~ str_sub(sequence, start = 30, end = 650),
+                              str_detect(label, "psba1_B09") ~ str_sub(sequence, start = 30, end = 600),
+                              str_detect(label, "psba1_B10") ~ str_sub(sequence, start = 30, end = 650),
+                              str_detect(label, "psba1_C12") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_D10") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_D11") ~ str_sub(sequence, start = 30, end = 545),
+           TRUE ~ str_sub(sequence, start = 30, end = 800)))
+
+r_all_fasta_sub <- r_all_fasta %>%
+  mutate(sequence = case_when(str_detect(label, "psba1_A04") ~ str_sub(sequence, start = 30, end = 450),
+                              str_detect(label, "psba1_A06") ~ str_sub(sequence, start = 30, end = 400),
+                              str_detect(label, "psba1_A07") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_A08") ~ str_sub(sequence, start = 30, end = 450),
+                              str_detect(label, "psba1_A08") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_A09") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_A12") ~ str_sub(sequence, start = 30, end = 550),
+                              str_detect(label, "psba1_B02") ~ str_sub(sequence, start = 30, end = 300),
+                              str_detect(label, "psba1_B03") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_B06") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_B09") ~ str_sub(sequence, start = 30, end = 450),
+                              str_detect(label, "psba1_B10") ~ str_sub(sequence, start = 30, end = 450),
+                              str_detect(label, "psba1_B11") ~ str_sub(sequence, start = 30, end = 450),
+                              str_detect(label, "psba1_C04") ~ str_sub(sequence, start = 30, end = 225),
+                              str_detect(label, "psba1_D05") ~ str_sub(sequence, start = 30, end = 300),
+                              str_detect(label, "psba1_D11") ~ str_sub(sequence, start = 30, end = 425),
+                              str_detect(label, "psba1_E03") ~ str_sub(sequence, start = 30, end = 550),
+                              str_detect(label, "psba1_F02") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_F08") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_G01") ~ str_sub(sequence, start = 30, end = 300),
+                              str_detect(label, "psba1_H01") ~ str_sub(sequence, start = 30, end = 550),
+                              str_detect(label, "psba1_H02") ~ str_sub(sequence, start = 30, end = 500),
+                              str_detect(label, "psba1_H10") ~ str_sub(sequence, start = 30, end = 450),
+                              TRUE ~ str_sub(sequence, start = 30, end = 600)))
+
+# convert to format for DECIPHER and reverse complement the reverse sequence
+
+f_dss <- f_all_fasta_sub %>%
+  deframe() %>%
+  as_dna() %>%
+  dna_to_DNAStringset()
+
+r_dss <- r_all_fasta_sub %>%
+  deframe() %>%
+  as_dna() %>%
+  dna_to_DNAStringset() %>%
+  reverseComplement()
+
+pair_list <- list()
+for(i in 1:length(f_dss)){
+  ss <- DNAStringSet(c(f_dss[i], r_dss[i]))
+  pair_list[[i]] <- ss
+}
+
+# Align the sample pairs
+alignment_list <- list()
+for(i in 1:length(pair_list)){
+  alignment <- AlignSeqs(pair_list[[i]], verbose = FALSE)
+  alignment_list[[i]] <- alignment
+}
+
+# View the alignments
+aligned_df <- data.frame()
+for(i in 1:length(alignment_list)){
+  a_pair <- alignment_list[[i]] %>% writeXStringSet("temp_file.fasta")
+  a_df <- read_fasta_df("temp_file.fasta")
+  aligned_df <- rbind(aligned_df, a_df)
+}
+
+aligned_plotting <- aligned_df %>%
+  mutate(sample_id = str_sub(label, 23, 25)) %>% # create a metadata column that identifies the sample
+  mutate(label = str_sub(label, 23, 31))
+  
+# Create profile key
+key <- aligned_plotting %>%
+  tibble::rownames_to_column(var = "id")
+
+# Create long dataframe for ggplot
+long_sequences <- str_split(aligned_plotting$sequence, "") %>%
+  reshape2::melt() %>%
+  group_by(L1) %>%
+  mutate(x = row_number(),
+         L1 = as.character(L1)) %>%
+  left_join(., key, by = c("L1" = "id")) %>%
+  ungroup()
+
+# Plot alignment
+ggplot(long_sequences, aes(y = label, x = x)) +
+      geom_tile(aes(fill = value), size = 1, name = "base") +
+      facet_wrap(~ sample_id, nrow = 12, scales = "free_y") +
+      scale_fill_manual(values = palette) +
+      theme(aspect.ratio = 0.3,
+            axis.title.y = element_blank()) +
+      scale_x_continuous(expand = c(0, 0)) +
+    xlab("Position")
+```
+
+
+##3.2 Exclude list
+
+```{r}
+# Sample list that we may want to exclude based on f and r alignments: B12, C04, G01, D06, D11
+exclude_list <- c("B12", "D06", "C04", "F02", "B02", "B03")
+
+align_list_final <- list()
+for(i in 1:length(alignment_list)){
+  if(str_sub(names(alignment_list[[i]][1]), 23, 25) %in% exclude_list) align_list_final[[i]] <- NULL else align_list_final[[i]] <- alignment_list[[i]]
+}
+
+align_list_final <- Filter(Negate(is.null), align_list_final)
+```
+
+
+##3.3 Create the consensus sequences
+
+```{r}
+consensus_df <- list()
+for(i in 1:length(align_list_final)){
+  a_con <- align_list_final[[i]] %>% ConsensusSequence()
+  names(a_con) <- names(align_list_final[[i]])[1]
+  consensus_df[[i]] <- a_con
+}
+```
+
+##3.4 Pocillopora psba
+```{r}
+pocillo_meta <- meta %>%
+  filter(mtORF == "Pmeandrina" | mtORF == "Pverrucosa" | mtORF == "Haplotype8a") %>%
+  filter(str_detect(psba_ID, "psb"))
+
+pocillo_names <- pocillo_meta %>% pull(psba_ID)
+
+pocillo_cons <- list()
+for(i in 1:length(consensus_df)){
+  if(str_sub(names(consensus_df[[i]]), 17, 25) %in% pocillo_names) pocillo_cons[[i]] <- consensus_df[[i]] else pocillo_cons[[i]] <- NULL
+}
+
+# Keep only the pocillo psba sequences
+pocillo_cons <- Filter(Negate(is.null), pocillo_cons)
+```
+
+
+###3.4.2 Poci: ITS2/psba distance matrices
+```{r}
+# Get consensus seqs
+pocillo_df <- data.frame()
+for(i in 1:length(pocillo_cons)){
+  pocillo_cons[[i]] %>% writeXStringSet("temp_file.fasta")
+  t_df <- read_fasta_df("temp_file.fasta")
+  pocillo_df <- rbind(pocillo_df, t_df)
+}
+
+# Kmer based distance matrix
+dis_psbaID <- pocillo_df %>%
+  mutate(psba_ID = str_sub(label, 17, 25)) %>%
+  left_join(., pocillo_meta) %>%
+  select(Vial, sequence) %>%
+  deframe() %>%
+  DNAStringSet() %>%
+  DNAStringSet_to_DNAbin() %>%
+  kmer::kdistance(k = 7) %>%
+  as.matrix()
+
+# Produce hierarchical tree
+psba_upgma_tree <- phangorn::upgma(dis_psbaID)
+
+# Subset the full matrix
+du_poci_sub <- dist_subset(du_poci, psba_upgma_tree$tip.label) %>%
+  as.matrix()
+
+# Produce hierarchical tree
+ITS2_upgma_tree <- phangorn::upgma(du_poci_sub)
+```
+
+###3.4.3 Pocillopora ITS2 Tanglegram
+```{r}
+untang <- untangle(dend1 = ITS2_upgma_tree %>% as.dendrogram(), dend2 = psba_upgma_tree %>% as.dendrogram, method = "step2side")
+tgram <- tanglegram(untang, margin_inner = 8)
+entanglement(tgram) # 0.01193893
+
+t_order <- labels(tgram$dend1)
+s_order <- labels(tgram$dend2)
+
+tt <- as.phylo(tgram$dend1)
+tt <- midpoint(tt)
+
+st <- as.phylo(tgram$dend2)
+st <- midpoint(st)
+
+tree_meta <- pocillo_meta %>%
+  filter(Vial %in% psba_upgma_tree$tip.label) %>%
+  mutate(new_lab = paste0(Vial, "_", mtORF))
+
+gtt <- ggtree(tt, ladderize = FALSE) 
+gtt$data <- gtt$data %>% left_join(., tree_meta, by = c("label" = "sample_name"))
+
+gtt <- gtt + geom_tiplab(size = 3, aes(label = label)) + geom_tippoint(aes(fill = mtORF), shape = 21, size = 5) + ggsci::scale_fill_d3(palette = "category20")
+gst <- ggtree(st, ladderize = FALSE)
+
+dtt <- gtt$data
+dst <- gst$data
+
+dtt$tree <- "ITS2"
+dst$tree <- "psbA"
+
+dst$x <- max(dst$x) - dst$x + max(dtt$x) + max(dtt$x) * 1
+
+pp <- gtt + geom_tree(data = dst)
+
+dd <- bind_rows(dtt, dst) %>%
+  filter(isTip == TRUE)
+
+dd1 <- as.data.frame(dd)
+
+p_ip <- pp + geom_line(aes(x, y, group = label), size = 1.2, data = dd1) +
+  ggsci::scale_colour_d3(palette = "category20") +
+  theme(legend.position = "none")
+
+p_ip
+```
+
+
+##3.5 Acropora psba
+```{r}
+acro_meta <- meta %>%
+  filter(mtORF == "Ahumilis") %>%
+  filter(str_detect(psba_ID, "psb"))
+
+acro_names <- acro_meta %>% pull(psba_ID)
+
+acro_cons <- list()
+for(i in 1:length(consensus_df)){
+  if(str_sub(names(consensus_df[[i]]), 17, 25) %in% acro_names) acro_cons[[i]] <- consensus_df[[i]] else acro_cons[[i]] <- NULL
+}
+
+# Keep only the pocillo psba sequences
+acro_cons <- Filter(Negate(is.null), acro_cons)
+```
+
+###3.5.2 Acro: ITS2/psbA distance matrices
+
+```{r}
+# Get consensus seqs
+acro_df <- data.frame()
+for(i in 1:length(acro_cons)){
+  acro_cons[[i]] %>% writeXStringSet("temp_file.fasta")
+  t_df <- read_fasta_df("temp_file.fasta")
+  acro_df <- rbind(acro_df, t_df)
+}
+
+# Kmer based distance matrix
+dis_psbaID <- acro_df %>%
+  mutate(psba_ID = str_sub(label, 17, 25)) %>%
+  left_join(., acro_meta) %>%
+  select(Vial, sequence) %>%
+  deframe() %>%
+  DNAStringSet() %>%
+  DNAStringSet_to_DNAbin() %>%
+  kmer::kdistance(k = 7) %>%
+  as.matrix()
+
+# Produce hierarchical tree
+psba_upgma_tree <- phangorn::upgma(dis_psbaID)
+
+# Subset the full matrix
+du_acro_sub <- dist_subset(du_acro, psba_upgma_tree$tip.label) %>%
+  as.matrix()
+
+# Produce hierarchical tree
+ITS2_upgma_tree <- phangorn::upgma(du_acro_sub)
+```
+
+###3.5.3 Acropora ITS2 Tanglegram
+
+```{r}
+untang <- untangle(dend1 = ITS2_upgma_tree %>% as.dendrogram(), dend2 = psba_upgma_tree %>% as.dendrogram, method = "step2side")
+tgram <- tanglegram(untang, margin_inner = 8)
+entanglement(tgram) # 0.1986148
+
+t_order <- labels(tgram$dend1)
+s_order <- labels(tgram$dend2)
+
+tt <- as.phylo(tgram$dend1)
+tt <- midpoint(tt)
+
+st <- as.phylo(tgram$dend2)
+st <- midpoint(st)
+
+tree_meta <- acro_meta %>%
+  filter(sample_name %in% psba_upgma_tree$tip.label) %>%
+  mutate(new_lab = paste0(Vial, "_", mtORF))
+
+gtt <- ggtree(tt, ladderize = FALSE) 
+gtt$data <- gtt$data %>% left_join(., tree_meta, by = c("label" = "sample_name"))
+
+gtt <- gtt + geom_tiplab(size = 3, aes(label = label))
+gst <- ggtree(st, ladderize = FALSE)
+
+dtt <- gtt$data
+dst <- gst$data
+
+dtt$tree <- "ITS2"
+dst$tree <- "psbA"
+
+dst$x <- max(dst$x) - dst$x + max(dtt$x) + max(dtt$x) * 1
+
+pp <- gtt + geom_tree(data = dst)
+
+dd <- bind_rows(dtt, dst) %>%
+  filter(isTip == TRUE)
+
+dd1 <- as.data.frame(dd)
+
+p_ip <- pp + geom_line(aes(x, y, group = label), size = 1.2, data = dd1)
+
+tgram <- tanglegram(untang, margin_inner = 8)
+p_ip
+```
+
+
+# 4 PCoAs
+**Here we are running a PCoA on UniFrac distances for the three communities associated with three different host groups (Pocillopora verrucosa, P. meandrina, and Acropora humilis) to look for patterns by reef in symbiont community structure** 
+
+##4.1 PCoA by Reef
+
+###4.1.1 Pver Reef PCoA
+```{r}
+reef_order <- meta %>% distinct(Reef, Lat) %>%
+  group_by(Reef) %>%
+  summarise(Lat = mean(Lat)) %>%
+  arrange(Lat) %>%
+  pull(Reef)
+
+pcoa_pver <- cmdscale(dist_pver, eig = TRUE) #this is doing 'cmds' or classic multidimensional scaling
+
+ordiplot(pcoa_pver, display = 'sites', type = 'text')
+barplot(pcoa_pver$eig, names = paste ('PCoA', 1:152), las = 3, ylab = 'eigenvalues')
+
+MDSxy.pver <- data.frame(pcoa_pver$points) %>% 
+  rownames_to_column(var = "Vial") %>% 
+  left_join(., meta)
+
+pverPCA <- MDSxy.pver %>%
+  mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+  ggplot(aes(X1, X2, fill = Reef)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) + 
+  scale_fill_viridis_d(option = "magma", direction = -1) +
+   theme(legend.position = "none", aspect.ratio = 1, text = element_text(size = 15))
+
+pverPCA
+```
+
+
+###4.1.2 Pmea Reef PCoA
+```{r}
+pcoa_pmh8 <- cmdscale(dist_pmh8, eig = TRUE)    #this is doing 'cmds' or classic multidimensional scaling
+
+ordiplot(pcoa_pmh8, display = 'sites', type = 'text')
+barplot(pcoa_pmh8$eig, names = paste ('PCoA', 1:172), las = 3, ylab = 'eigenvalues')
+
+MDSxy.pmh8 <- data.frame(pcoa_pmh8$points) %>% 
+  rownames_to_column(var = "Vial") %>% 
+  left_join(., meta)
+
+pmh8PCA <- MDSxy.pmh8 %>%
+  mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+  ggplot(aes(X1, X2, fill = Reef)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) + 
+  scale_fill_viridis_d(option = "magma", direction = -1) +
+   theme(legend.position = "none", aspect.ratio = 1, text = element_text(size = 15))
+
+pmh8PCA
+```
+
+
+###4.1.3 Acro Reef PCoA
+```{r}
+pcoa_acro <- cmdscale(dist_acro, eig = TRUE)    #this is doing 'cmds' or classic multidimensional scaling
+
+ordiplot(pcoa_acro, display = 'sites', type = 'text')
+barplot (pcoa_acro$eig, names = paste ('PCoA', 1:260), las = 3, ylab = 'eigenvalues')
+
+MDSxy.acro <- data.frame(pcoa_acro$points) %>% 
+  rownames_to_column(var = "Vial") %>% 
+  left_join(., meta)
+
+acroPCA <- MDSxy.acro %>%
+  mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+  ggplot(aes(X1, X2, fill = Reef)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) + 
+  scale_fill_viridis_d(option = "magma", direction = -1) 
+ # scale_fill_manual(values = reef_pal) #+
+ #theme(legend.position = "none", aspect.ratio = 1, text = element_text(size = 15))
+
+acroPCA
+```
+
+### Fig SX PCoA Reef
+```{r}
+pverPCA + pmh8PCA + acroPCA
+```
+
+
+## 4.2 PCoA by Bleaching
+
+###4.2.1 Pver Bleaching PCA
+```{r}
+library("RColorBrewer")
+my_colors <- c("#F5F5F5", "#F6E8C3", "#DFC27D", "#BF812D", "#8C510A", "#543005")
+
+
+MDSxy.pver.b <- data.frame(pcoa_pver$points) %>% 
+  rownames_to_column(var = "Vial") %>% 
+  left_join(., meta) %>% 
+      mutate(catBleaching = as.factor(catBleaching))
+
+
+pverPCA.b <- MDSxy.pver.b %>%
+  ggplot(aes(X1, X2, fill = catBleaching)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) +
+  scale_fill_manual(values = my_colors) +
+    theme(legend.position = "none") 
+
+pverPCA.b
+```
+
+###4.2.2 Pmea Bleaching PCA
+```{r}
+MDSxy.pmh8.b <- data.frame(pcoa_pmh8$points) %>% 
+  rownames_to_column(var = "Vial") %>% 
+  left_join(., meta) %>% 
+      mutate(catBleaching = as.factor(catBleaching))
+
+pmh8PCA.b <- MDSxy.pmh8.b %>%
+  ggplot(aes(X1, X2, fill = catBleaching)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) +
+  scale_fill_manual(values = my_colors) +
+  theme(legend.position = "none") 
+
+pmh8PCA.b
+```
+
+###4.2.3 Acro Bleaching PCA
+```{r}
+pcoa_acro.b <- cmdscale(dist_acro, eig = TRUE)    #this is doing 'cmds' or classic multidimensional scaling
+outlier_samples <- c("A ten 298", "A ten 303", "A ten 302", "A ten 231", "A ten 225", "A ten 295", "A ten 223", "A ten 012")
+
+MDSxy.acro.b <- data.frame(pcoa_acro.b$points) %>% 
+  rownames_to_column(var = "Vial") %>% 
+  left_join(., meta) %>% 
+   mutate(catBleaching = as.factor(catBleaching)) %>% 
+  filter(!(Vial %in% outlier_samples)) 
+
+acroPCA.b <- MDSxy.acro.b %>%
+  ggplot(aes(X1, X2, fill = catBleaching)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) +
+  theme(legend.position = "right", aspect.ratio = 1, text = element_text(size = 10)) +
+     scale_fill_manual(values = my_colors)
+
+acroPCA.b
+```
+
+### Fig SX PCA Bleaching 
+```{r}
+#final figure for bleaching category PCoA 
+PCA_bleach <- pverPCA.b + pmh8PCA.b + acroPCA.b 
+PCA_bleach
+```
+
+
+
+## 4.3 PCoA by Admixture
+**Here we are looking at the host genetic clustering (admixture proportion) and whether this structures the symbiont communities for each species** 
+
+### 4.3.1 Pver Admixture PCoA
+```{r}
+##Looking at whether cluster from dartseq is important factor in symbiont communities in pver. Note we did not sequence haplotype 8a 
+load("HostAdmix/qlong.admix.pver.RData")
+
+qlong.admix.pver <- qlong.admix.pver %>% 
+  mutate(Ind = as.factor(Ind)) %>% 
+   dplyr::rename(Vial = Ind)
+
+
+MDS.admix.pver <- MDSxy.pver.b %>% left_join(qlong.admix.pver)
+
+pver.admixPCA <- MDS.admix.pver %>%
+  ggplot(aes(X1, X2, fill = value)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) +
+      scale_fill_distiller(palette = "YlOrRd") +
+  theme(legend.position = "none") +
+      theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank())
+ #theme(legend.position = "right", aspect.ratio = 1, text = element_text(size = 15))      
+pver.admixPCA 
+```
+
+### 4.3.2 Pmea Admixture PCoA
+```{r}
+##Looking at whether cluster from dartseq is important factor in symbiont communities in pver. Note we did not sequence haplotype 8a 
+load("HostAdmix/qlong.admix.pmea.RData")
+
+qlong.admix.pmea <- qlong.admix.pmea %>% 
+  mutate(Ind = as.factor(Ind)) %>% 
+   dplyr::rename(Vial = Ind)
+
+
+MDS.admix.pmea <- MDSxy.pmh8 %>% left_join(qlong.admix.pmea)
+
+pmea.admixPCA <- MDS.admix.pmea %>%
+  ggplot(aes(X1, X2, fill = value)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) +
+      scale_fill_distiller(palette = "YlOrRd") +
+  theme(legend.position = "none") +
+      theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank())
+ #theme(legend.position = "right", aspect.ratio = 1, text = element_text(size = 15))      
+pmea.admixPCA 
+```
+
+### 4.3.3 Acro Admixture PCoA
+```{r}
+#looking only at Cluster 3 of Acropora humilis - there were 3 distinct clusters found which correlate to the 3 different morphotypes. 
+
+load("HostAdmix/qlong.admix.acroC3.RData")
+
+qlong.admix.acroC3 <- qlong.admix.acroC3 %>% 
+  mutate(Ind = as.factor(Ind)) %>% 
+   dplyr::rename(Vial = Ind)
+
+
+MDS.admix.acroC3 <- MDSxy.acro.b %>% left_join(qlong.admix.acroC3)
+
+acro.admixPCA.C3 <- MDS.admix.acroC3 %>%
+  ggplot(aes(X1, X2, fill = value)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) +
+    scale_fill_distiller(palette = "YlOrRd") +
+   theme(legend.position = "right", aspect.ratio = 1, text = element_text(size = 15)) +
+    theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank())
+  
+acro.admixPCA.C3 
+```
+
+### Fig SX PCA Admixture
+```{r}
+PCA_admix <- pver.admixPCA  + pmea.admixPCA + acro.admixPCA.C3
+PCA_admix
+```
+
+## 4.4 PCoA haplotype (Pmea)
+```{r}
+#this shows that there is no effect of haplotype 8a/ p. meandrina on symbiont communities, but we do see admixture clusters of P. meandrina are more important. 
+MDSxy.pmh8.b <- data.frame(pcoa_pmh8$points) %>% 
+  rownames_to_column(var = "Vial") %>% 
+  left_join(., meta) 
+
+
+pmh8PCA.b <- MDSxy.pmh8.b %>%
+  ggplot(aes(X1, X2, fill = mtORF)) + 
+  geom_point(alpha = 1, shape = 21, size = 3) +
+        scale_fill_brewer(palette = "Spectral") +
+ theme(legend.position = "right", aspect.ratio = 1, text = element_text(size = 15))
+
+ # theme(legend.position = "none") +
+
+pmh8PCA.b
+```
+
+
+# 5 dbRDA 
+**Here, we test UniFrac distances with environmental co-variates using distance-based RDA. We will use individual-based variables (depth, bleaching condition, and host genotype), biogeographic variable (latitude), DHW at time of collection (current disturbance)DHW 2020), and a long-term disturbance variable (max DHW 1986 - 2020)** 
+
+## 5.1 Pver dbRDA
+```{r}
+#importing unifrac distances for analysis 
+meta_pver <- meta %>%
+  filter(mtORF == "Pverrucosa") %>%
+  filter(sample_name %in% keepers_ss$sample_name) %>%
+  mutate(catBleaching = as.numeric(catBleaching)) %>%
+  tibble::column_to_rownames(var = "Vial") %>%
+  mutate(Vial = rownames(.)) 
+
+
+#combine Unifrac distances with enviro. data.
+dist_pver_ordered <- dist_subset(dist_pver, rownames(meta_pver))
+
+# Make a correlation matrix of numeric variables
+cm <- cor(meta_pver %>% dplyr::select(Depth, maxDHW, MMM, DHW2020,Lat, Long))
+
+#check correlations visually 
+corrplot(cm) 
+cm %>% cor()
+
+# Check the vif scores of the full model
+ord_pver_full <- dbrda(dist_pver_ordered ~ Lat + Long + MMM + Depth + catBleaching + DHW2020 + maxDHW, data = meta_pver)
+
+sort(vif.cca(ord_pver_full)) 
+#catBleaching        Depth       maxDHW      DHW2020         Long          Lat          MMM 
+   # 1.029952     1.058190     2.392371     2.657746    10.345007    17.881648    28.913384 
+
+# Reduce the model (consult the corplot and vif scores). We will omit Long and MMM, and latitude will reflect overall biogeographic patterns 
+ord_pver <- dbrda(dist_pver_ordered ~ maxDHW + Lat + Depth + catBleaching + DHW2020 , data = meta_pver)
+
+sort(vif.cca(ord_pver)) 
+#catBleaching        Depth       maxDHW        Admix      DHW2020          Lat 
+   # 1.037915     1.040986     1.169411     1.225877     2.705696     2.991079 
+
+# Use ordistep to run a backward stepwise model. This will reduce the model to the most significant parameters 
+os_pver_backward <- ordistep(ord_pver, direction = "backward", permutations = 999)
+anova(os_pver_backward, by = 'margin')
+
+#Model: dbrda(formula = dist_pver_ordered ~ Lat + Depth + maxDHW, data = meta_pver)
+        #  Df SumOfSqs      F Pr(>F)  
+#Lat        1   0.0645 2.5151  0.031 *
+#Depth      1   0.0460 1.7938  0.094 .
+#maxDHW     1   0.0524 2.0405  0.056 .
+#Residual 148   3.7981                
+
+#variance partitioning to see how much variation is explained by each factor 
+varp <- varpart(dist_pver_ordered, ~Lat, ~maxDHW, data = meta_pver)
+plot(varp, digits = 2, Xnames = c("Lat", "maxDHW"), bg = c("navy", "tomato"))
+
+#extract dbRDA scores
+pver_scores <- as.data.frame(scores(os_pver_backward, display = "sites")) %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta_pver)
+
+#extract dbRDA vectors
+pver_vectors <- as.data.frame(os_pver_backward$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+pver_fullrda <- pver_scores %>%
+  mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = Lat), size = 3, shape = 21) +
+      geom_label_repel(data = pver_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.75, size = 4, segment.colour = NA) +
+      geom_segment(data = pver_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+      scale_fill_viridis_c(option = "magma", direction = -1) +
+  theme(aspect.ratio = 1, text = element_text(size = 15)) +
+  theme(legend.position = "none") +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank())
+
+
+pver_fullrda
+```
+
+## 5.2 Pmea dbRDA
+```{r}
+#importing unifrac distances for analysis 
+meta_pmh8 <- meta %>%
+  filter(mtORF == "Pmeandrina" | mtORF == "Haplotype8a") %>%
+  filter(sample_name %in% keepers_ss$sample_name) %>%
+  mutate(catBleaching = as.numeric(catBleaching)) %>%
+  tibble::column_to_rownames(var = "Vial") %>%
+  mutate(Vial = rownames(.))
+
+
+dist_pmh8_ordered <- dist_subset(dist_pmh8, rownames(meta_pmh8))
+
+# Make a correlation matrix of numeric variables
+cm <- cor(meta_pmh8 %>% dplyr::select(Depth, maxDHW, MMM, DHW2020, Lat, Long))
+
+#check correlations visually 
+corrplot(cm) 
+cm %>% cor()
+
+# Check the vif scores of the full model
+ord_pmh8_full <- dbrda(dist_pmh8_ordered ~ Lat + Long + MMM + Depth + catBleaching + DHW2020 + maxDHW, data = meta_pmh8)
+
+sort(vif.cca(ord_pmh8_full)) 
+#catBleaching        Depth       maxDHW      DHW2020         Long          Lat          MMM 
+   # 1.123412     1.246164     2.469619     5.601568    19.690299    20.097697    28.867819 
+
+# Reduce the model (consult the corplot and vif scores). We will omit Long and MMM, and latitude will reflect overall biogeographic patterns 
+ord_pmh8 <- dbrda(dist_pmh8_ordered ~ Lat + Depth + catBleaching + DHW2020 + maxDHW, data = meta_pmh8)
+
+sort(vif.cca(ord_pmh8)) 
+#catBleaching        Depth       maxDHW      DHW2020          Lat 
+  #  1.105709     1.180272     1.540065     5.109198     6.143559 
+
+# Use ordistep to run a backward stepwise model. This will reduce the model to the most significant parameters 
+os_pmh8_backward <- ordistep(ord_pmh8, direction = "backward", permutations = 999)
+anova(os_pmh8_backward, by = 'margin')
+
+#Model: dbrda(formula = dist_pmh8_ordered ~ Lat + catBleaching + maxDHW, data = meta_pmh8)
+           #   Df SumOfSqs       F Pr(>F)    
+#Lat            1   0.4772 20.4357  0.001 ***
+#catBleaching   1   0.2237  9.5811  0.001 ***
+#maxDHW         1   0.0976  4.1814  0.015 *  
+#Residual     168   3.9227               
+
+#variance partitioning to see how much variation is explained by each factor 
+varp <- varpart(dist_pmh8_ordered, ~Lat, ~catBleaching, ~maxDHW, data = meta_pmh8)
+plot(varp, digits = 2, Xnames = c("Lat", "catBleaching", "maxDHW"), bg = c("navy", "tomato", "green"))
+
+#extract dbRDA scores
+pmh8_scores <- as.data.frame(scores(os_pmh8_backward, display = "sites")) %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta_pmh8)
+
+#extract dbRDA vectors
+pmh8_vectors <- as.data.frame(os_pmh8_backward$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+pmh8_fullrda <- pmh8_scores %>%
+  mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = Lat), size = 3, shape = 21) +
+      geom_label_repel(data = pmh8_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.75, size = 4, segment.colour = NA) +
+      geom_segment(data = pmh8_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+      scale_fill_viridis_c(option = "magma", direction = -1) +
+  theme(aspect.ratio = 1, text = element_text(size = 15)) +
+  theme(legend.position = "none") +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank())
+
+
+pmh8_fullrda
+```
+
+## 5.3 Acro dbRDA
+```{r}
+#list outlier samples
+outlier_samples <- c("Plate6_D012", "Plate6_E009", "Plate6_H011", "Plate6_B012", "Plate7_D006", "Plate6_G009", "Plate7_H009", "Plate7_A010", "Plate6_D011")
+
+#importing unifrac distances for analysis 
+meta_acro <- meta %>%
+  filter(mtORF == "Ahumilis") %>%
+  filter(sample_name %in% keepers_ss$sample_name) %>%
+  filter(!(sample_name %in% outlier_samples)) %>%
+  tibble::column_to_rownames(var = "Vial") %>%
+  mutate(Vial = rownames(.))
+
+
+#combine Unifrac distances with enviro. data.
+dist_acro_ordered <- dist_subset(dist_acro, rownames(meta_acro))
+
+# Make a correlation matrix of numeric variables
+cm <- cor(meta_acro %>% dplyr::select(Depth, maxDHW, MMM, DHW2020, Lat, Long))
+
+#check correlations visually 
+corrplot(cm) 
+cm %>% cor()
+
+# Check the vif scores of the full model
+ord_acro_full <- dbrda(dist_acro_ordered ~ Lat + Long + MMM + Depth + catBleaching + DHW2020 + maxDHW, data = meta_acro)
+
+sort(vif.cca(ord_acro_full)) 
+#catBleaching        Depth       maxDHW      DHW2020         Long          Lat          MMM 
+  #  1.275608     1.291015     2.334278     3.436693    15.066787    28.331807    47.078976 
+
+# Reduce the model (consult the corplot and vif scores). We will omit Long and MMM, and latitude will reflect overall biogeographic patterns 
+ord_acro <- dbrda(dist_acro_ordered ~ Lat + Depth + catBleaching + DHW2020 + maxDHW, data = meta_acro)
+
+sort(vif.cca(ord_acro)) 
+     #  Depth catBleaching       maxDHW      DHW2020          Lat 
+    #1.189509     1.242132     1.677445     3.409606     3.756585 
+
+# Use ordistep to run a backward stepwise model. This will reduce the model to the most significant parameters 
+os_acro_backward <- ordistep(ord_acro, direction = "backward", permutations = 999)
+anova(os_acro_backward, by = 'margin')
+
+ # Model: dbrda(formula = dist_acro_ordered ~ Lat + Depth + catBleaching + DHW2020 + maxDHW, data = meta_acro)
+   #           Df SumOfSqs       F Pr(>F)    
+#Lat            1   0.2706  6.0372  0.002 ** 
+#Depth          1   0.1497  3.3400  0.004 ** 
+#catBleaching   1   0.1046  2.3334  0.048 *  
+#DHW2020        1   0.3767  8.4017  0.001 ***
+#maxDHW         1   0.8285 18.4810  0.001 ***
+#Residual     254  11.3870           
+
+#variance partitioning to see how much variation is explained by each factor 
+varp <- varpart(dist_acro_ordered, ~Lat, ~Depth, ~DHW2020, ~maxDHW, data = meta_acro)
+plot(varp, digits = 2, Xnames = c("Lat", "Depth", "DHW2020", "maxDHW"), bg = c("navy", "tomato", "green", "yellow"))
+
+#extract dbRDA scores
+acro_scores <- as.data.frame(scores(os_acro_backward, display = "sites")) %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta_acro)
+
+#extract dbRDA vectors
+acro_vectors <- as.data.frame(os_acro_backward$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+acro_fullrda <- acro_scores %>%
+  mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = Lat), size = 3, shape = 21) +
+      geom_label_repel(data = acro_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.75, size = 4, segment.colour = NA) +
+      geom_segment(data = acro_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+        theme(aspect.ratio = 1, text = element_text(size = 15)) +
+      scale_fill_viridis_c(option = "magma", direction = -1, guide = guide_colorbar(reverse = TRUE)) +
+     theme(legend.position = "right") +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) 
+     #edit legends
+
+
+acro_fullrda
+```
+
+
+## Fig 4 dbRDA
+```{r}
+dbrda <- pmh8_fullrda + pver_fullrda + acro_fullrda 
+dbrda
+```
+
+
+# 6 Procrustes Rotation
+
+### Load Data
+```{r}
+load("clean_data.RData")
+
+seq_data <- clean_data %>% 
+  filter(!str_detect(name, "non")) %>% 
+  filter(!str_detect(name, "p_"))
+  
+#creating an object for each species 
+poci_seqs.b <- seq_data %>% filter(coral_genus == "Pocillopora")
+pver_seqs.b <- seq_data %>% filter(str_detect(mtORF, "Pverrucosa"))
+pmh8_seqs.b <- seq_data %>% filter(str_detect(mtORF, "Pmeandrina|Haplotype8a"))
+acro_seqs.b <- seq_data %>% filter(str_detect(mtORF, "Ahumilis"))
+
+#code for defining specific colours per reef for procrustes plots later on
+reef_pal2 <- c("#ac1917", "#e54a50", "#b75420", "#ea8553", "#c0982b", "#eec76b", "#768b45", "#a9be77", "#B2DFDB", "#6fb293", "#4eaaa6","#1c7873", "#00798C")
+
+reef_names <- c("Osprey", "Bougainville", "Moore", "Willis", "Holmes", "Chilcott", "Herald","Lihou", "Flinders", "Marion", "Frederick", "Saumarez", "Wreck")
+
+names(reef_pal2) <- reef_names
+```
+
+```{r}
+clust_names <- c("Cluster 1", "Cluster 2", "Cluster 3")
+clust_pal <- c("#CB409D", "#FF983B", "#FE4E4E")
+names(clust_pal) <- clust_names
+```
+
+
+```{r}
+kid_names <- c("C3A", "C3B")
+kid_pal <- c("#CB409D", "#FF983B")
+names(kid_pal) <- kid_names
+```
+
+## Load Metadata
+```{r}
+meta = read.csv("Metadata.csv") %>% 
+  mutate(sample_name = as.factor(sample_name))
+
+```
+
+
+
+## Load Kgroup clustering for symbiont genetics
+```{r}
+poci_dend <- as.dendrogram(hclust_samps_poci)
+poci_dend <- color_branches(poci_dend, k = 10, col = ggsci::pal_d3(palette = "category10"))
+plot(poci_dend)
+
+poci_k <- data.frame(Vial = labels(poci_dend),
+                     k = dendextend::get_leaves_branches_col(poci_dend)) %>%
+  mutate(k_id = case_when(k == "#2CA02CFF" ~ "ClatN",
+                          k == "#9467BDFF" ~ "ClatS",
+                          k == "#8C564BFF" ~ "Cpac",
+                          TRUE ~ "outliers")) %>%
+  filter(k_id != "outliers") %>%
+  left_join(., meta) %>%
+  dplyr::select(Vial, k_id, k, Reef, Lat, Long, mtORF)
+
+acro_dend <- as.dendrogram(hclust_samps_acro)
+acro_dend <- color_branches(acro_dend, k = 10, col = ggsci::pal_d3(palette = "category10"))
+plot(acro_dend)
+
+acro_k <- data.frame(Vial = labels(acro_dend),
+                     k = dendextend::get_leaves_branches_col(acro_dend)) %>%
+  mutate(k_id = case_when(k == "#D62728FF" ~ "C3A",
+                          k == "#9467BDFF" ~ "C3B",
+                          TRUE ~ "outliers")) %>%
+  filter(k_id != "outliers") %>%
+  left_join(., meta) %>%
+  dplyr::select(Vial, k_id, k, Reef, Lat, Long, mtORF)
+
+k_map <- rbind(poci_k, acro_k)
+```
+
+
+
+## 6.1 P. meandrina Procrustes 
+```{r}
+#here is the subset with the data that matches the host dartseq data
+seqs_wide_pmh8_subset.b <- pmh8_seqs.b %>% 
+  filter(Vial %in% c("P ver 001", "P ver 010", "P ver 055", "P ver 091", "P ver 246", "P ver 255", "P ver 233", "P ver 002", "P ver 011", "P ver 056", "P ver 092", "P ver 247", "P ver 167", "P ver 234", "P ver 013", "P ver 043", "P ver 057", "P ver 095", "P ver 248", "P ver 168","P ver 004", "P ver 014", "P ver 347", "P ver 059", "P ver 097", "P ver 249", "P ver 169","P ver 005", "P ver 029", "P ver 358","P ver 284", "P ver 251", "P ver 170", "P ver 031", "P ver 361", "P ver 061", "P ver 286", "P ver 252", "P ver 171", "P ver 008","P ver 035", "P ver 367", "P ver 082", "P ver 290", "P ver 037", "P ver 084", "P ver 245", "P ver 232", "P ver 015", "P ver 066","P ver 112", "P ver 266", "P ver 174", "P ver 373", "P ver 271", "P ver 179", "P ver 376", "P ver 304", "P ver 182", "P ver 381", "P ver 275", "P ver 382", "P ver 104", "P ver 237", "P ver 277", "P ver 023", "P ver 239", "P ver 065"))
+
+#now must filter fasta files to correspond to samples in seqs_long subset 
+fasta_pmh8.b <- read_fasta_df("0_SymPortal/186_20211115_03_DBV_20211116T024440.seqs.fasta") %>%
+  filter(label %in% seqs_wide_pmh8_subset.b$name) %>%   
+  deframe() %>%
+  as_dna()
+
+#creating the subset symbiont tree
+kdist_pmh8.b <- fasta_pmh8.b %>%
+  dna_to_DNAbin() %>%
+  kdistance(k = 7, residues = "DNA", method = "edgar") 
+
+#as a distance matrix
+kdist_pmh8.b <- as.matrix(kdist_pmh8.b)
+
+#creating the tree
+k_tree_pmh8.b <- kdist_pmh8.b %>% phangorn::upgma()
+
+#subsetting the metadata
+seqs_wide_pmh8.b <- poci_seqs.b[poci_seqs.b$Vial %in% seqs_wide_pmh8_subset.b$Vial,] %>% 
+  dplyr::select(Vial, name, value) %>%
+  pivot_wider(names_from = name, values_from = value, values_fill = 0) %>%
+  tibble::column_to_rownames(var = "Vial")
+
+#creating unifrac distance matrix and tree 
+k_unidist_pmh8.b <- GUniFrac(seqs_wide_pmh8.b, k_tree_pmh8.b)   #GUniFrac calculates all the distances 
+k_unidist_pmh8.b <- k_unidist_pmh8.b$unifracs
+
+#GUniFrac with alpha 0.5
+du_pmh8.b <- k_unidist_pmh8.b[, , "d_0.5"]    # GUniFrac with alpha 0.5 
+dist_pmh8.b <- as.dist(du_pmh8.b, diag = FALSE)
+```
+
+### 6.1.1 P.meandrina Dartseq Tree
+```{r}
+load("HostAdmix/gl3.csmp.pmea.RData")
+
+library(adegenet)
+
+# calculate a distance matrix
+dist_matrix2 <- gl.dist.ind(gl3.csmp.pmea, method = "euclidean", scale = TRUE)
+# convert the distance matrix to a dist object
+dart.pmea.tree <- as.dist(dist_matrix2)
+
+```
+
+
+### 6.1.2 Subset H and P matrices
+```{r, include = FALSE}
+library(vegan)
+
+#convert host (H) and symbiont (P) distance trees as data matrices 
+H.dist <- dart.pmea.tree %>% as.matrix()
+P.dist <- dist_pmh8.b %>% as.matrix()
+
+#must have same number of dimensions 
+dim(H.dist)
+dim(P.dist)
+
+# Subset to only the samples that are in both datasets
+intersect_samples <- intersect(rownames(H.dist), rownames(P.dist))
+P.dist_intersect <- P.dist[intersect_samples, ]
+H.dist_intersect <- H.dist[intersect_samples, ]
+
+# Check that the samples are now aligned
+all(rownames(H.dist_intersect) == rownames(P.dist_intersect))
+
+#re-check dimensions
+dim(H.dist_intersect)
+dim(P.dist_intersect)
+
+#where is the issue with one extra in H dist? 
+setdiff(rownames(H.dist_intersect), rownames(P.dist_intersect))
+setdiff(colnames(H.dist_intersect), colnames(P.dist_intersect))
+
+# Identify the column that is missing in P.dist_intersect
+missing_col <- setdiff(colnames(H.dist_intersect), colnames(P.dist_intersect))
+
+# Remove the missing column from H.dist_intersect
+H.dist_intersect_complete <- H.dist_intersect[, !colnames(H.dist_intersect) %in% missing_col]
+
+# Subset to only the samples that are in both datasets
+intersect_samples <- intersect(rownames(H.dist_intersect_complete), rownames(P.dist_intersect))
+P.dist <- P.dist_intersect[intersect_samples, ]
+H.dist <- H.dist_intersect_complete[intersect_samples, ]
+
+#recheck dimensions - all good 
+dim(P.dist)
+dim(H.dist)
+```
+
+
+###6.1.3 Perform Paco analysis
+```{r, include = FALSE}
+# Perform Procrustes analysis. logical that symbionts depend on the host. so X = host and Y = symbiont. 
+
+paco.pmea <- procrustes(H.dist, P.dist, symmetric = FALSE)
+summary(paco.pmea)
+
+#symmetric = FALSE: This specifies that the Procrustes rotation can be non-orthogonal (i.e. generalised), meaning that it can include scaling and shearing transformations in addition to rotation and reflection. This allows for more flexible alignment between the two dissimilarity matrices, but may result in a less interpretable or meaningful alignment depending on the nature of the data.
+
+
+#statistics check for residuals 
+#paco error chart 
+plot(paco.pmea, kind = 1, type = "text")
+
+#show paco residuals. higher numbers mean these are the samples that have high dissimilarity between the symbiont and host trees
+plot(paco.pmea, kind = 2, type = "text")
+```
+
+
+###6.1.4 P. mea procrustes plot
+```{r}
+#transfer PC coords into dataframe for plotting  
+hp.df.pmea <- data.frame(rda1=paco.pmea$Yrot[,1],
+rda2=paco.pmea$Yrot[,2],xrda1=paco.pmea$X[,1],
+xrda2=paco.pmea$X[,2]) %>% 
+  tibble::rownames_to_column(var = "Vial") %>% 
+  filter(Vial != c("P ver 001", "P ver 010"))
+#pver 001, pver010 need to be removed bc outliers 
+
+
+#filter metadata to just reef
+meta.reef <- meta %>% 
+  dplyr::select(Vial, Reef)
+
+#left join the metadata to get reef into the dataframe 
+hp.df.pmea2 <- hp.df.pmea %>% left_join(meta.reef) %>% 
+  mutate(Reef = factor(Reef, levels = c("Bougainville", "Moore", "Willis", "Holmes", "Chilcott", "Marion", "Frederick", "Saumarez", "Wreck"))) 
+
+#create plot 
+procrust.pmea <- ggplot(hp.df.pmea2) +
+  geom_segment(aes(x=rda1,y=rda2,xend=xrda1,yend=xrda2), size = .2) +
+  geom_point(aes(x=rda1, y=rda2, shape = "Host", color = Reef)) +
+  geom_point(aes(x=xrda1, y=xrda2, shape = "Symbiont", color = Reef)) +
+  scale_shape_manual(name = "Groups", 
+                     values = c("Host" = 19, "Symbiont" = 17)) +
+  scale_colour_manual(values = reef_pal2) +
+    theme(legend.position = "none") +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) +
+  theme(aspect.ratio = 1) 
+
+```
+
+###6.1.5 Test significance 
+```{r}
+#testing significance 
+protest(X = H.dist, Y = P.dist, scores = "sites", permutations = 999)
+```
+
+
+
+
+# 6.2 P. verrucosa Procrustes 
+```{r}
+load("HostAdmix/list.pver.RData")
+#here is the subset with the data that matches the host dartseq data
+seqs_wide_pver_subset.b <- pver_seqs.b %>% 
+  filter(Vial %in% c(list.pver))
+
+
+#now must filter fasta files to correspond to samples in seqs_long subset 
+fasta_pver.b <- read_fasta_df("0_SymPortal/186_20211115_03_DBV_20211116T024440.seqs.fasta") %>%
+  filter(label %in% seqs_wide_pver_subset.b$name) %>%   
+  deframe() %>%
+  as_dna()
+
+
+#creating the subset symbiont tree
+kdist_pver.b <- fasta_pver.b %>%
+  dna_to_DNAbin() %>%
+  kdistance(k = 7, residues = "DNA", method = "edgar") 
+
+#as a distance matrix
+kdist_pver.b <- as.matrix(kdist_pver.b)
+
+#creating the tree
+k_tree_pver.b <- kdist_pver.b %>% phangorn::upgma()
+
+#subsetting the metadata
+seqs_wide_pver.b <- poci_seqs.b[poci_seqs.b$Vial %in% seqs_wide_pver_subset.b$Vial,] %>% 
+  dplyr::select(Vial, name, value) %>%
+  pivot_wider(names_from = name, values_from = value, values_fill = 0) %>%
+  tibble::column_to_rownames(var = "Vial")
+
+#creating unifrac distance matrix and tree 
+k_unidist_pver.b <- GUniFrac(seqs_wide_pver.b, k_tree_pver.b)   #GUniFrac calculates all the distances 
+k_unidist_pver.b <- k_unidist_pver.b$unifracs
+
+#GUniFrac with alpha 0.5
+du_pver.b <- k_unidist_pver.b[, , "d_0.5"]    # GUniFrac with alpha 0.5 
+dist_pver.b <- as.dist(du_pver.b, diag = FALSE)
+```
+
+
+### 6.2.1 P.verrucosa Dartseq Tree
+```{r}
+load("HostAdmix/gl3.csmp.pver.RData")
+
+library(adegenet)
+
+# calculate a distance matrix
+dist_matrix_pver <- gl.dist.ind(gl3.csmp.pver, method = "euclidean", scale = TRUE)
+# convert the distance matrix to a dist object
+dart.pver.tree <- as.dist(dist_matrix_pver)
+
+```
+
+
+###6.2.2 Subset H and P matrices
+```{r}
+library(vegan)
+
+#convert host (H) and symbiont (P) distance trees as data matrices 
+H.dist.pver <- dart.pver.tree %>% as.matrix()
+P.dist.pver <- dist_pver.b %>% as.matrix()
+
+#must have same number of dimensions 
+dim(H.dist.pver)
+dim(P.dist.pver)
+
+# Subset to only the samples that are in both datasets
+intersect_samples.pver <- intersect(rownames(H.dist.pver), rownames(P.dist.pver))
+P.dist_intersect.pver <- P.dist.pver[intersect_samples.pver, ]
+H.dist_intersect.pver <- H.dist.pver[intersect_samples.pver, ]
+
+# Check that the samples are now aligned
+all(rownames(H.dist_intersect.pver) == rownames(P.dist_intersect.pver))
+
+#re-check dimensions
+dim(H.dist_intersect.pver)
+dim(P.dist_intersect.pver)
+
+#where is the issue with one extra in H dist? 
+setdiff(rownames(H.dist_intersect.pver), rownames(P.dist_intersect.pver))
+setdiff(colnames(H.dist_intersect.pver), colnames(P.dist_intersect.pver))
+
+# Identify the column that is missing in P.dist_intersect
+missing_col.pver <- setdiff(colnames(H.dist_intersect.pver), colnames(P.dist_intersect.pver))
+# P ver 379 
+
+# Remove the missing column from H.dist_intersect
+H.dist_intersect_complete.pver <- H.dist_intersect.pver[, !colnames(H.dist_intersect.pver) %in% missing_col.pver]
+
+# Subset to only the samples that are in both datasets
+intersect_samples.pver <- intersect(rownames(H.dist_intersect_complete.pver), rownames(P.dist_intersect.pver))
+P.dist.pver <- P.dist_intersect.pver[intersect_samples.pver, ]
+H.dist.pver <- H.dist_intersect_complete.pver[intersect_samples.pver, ]
+
+#recheck dimensions - all good 
+dim(P.dist.pver)
+dim(H.dist.pver)
+```
+
+
+###6.2.3 Perform Paco analysis
+```{r, include = FALSE}
+# Perform Procrustes analysis. logical that symbionts depend on the host. so X = host and Y = symbiont 
+
+paco.pver <- procrustes(H.dist.pver, P.dist.pver, symmetric = FALSE)
+summary(paco.pver)
+#sum of squares here is ridiculous (over 1 million)
+
+#symmetric = FALSE: This specifies that the Procrustes rotation can be non-orthogonal (i.e. generalised), meaning that it can include scaling and shearing transformations in addition to rotation and reflection. This allows for more flexible alignment between the two dissimilarity matrices, but may result in a less interpretable or meaningful alignment depending on the nature of the data.
+
+#Check residuals of paco 
+#paco error chart 
+plot(paco.pver, kind = 1, type = "text")
+
+#show paco residuals. higher numbers mean these are the samples that have high dissimilarity between the symbiont and host trees
+plot(paco.pver, kind = 2, type = "text")
+```
+
+
+###6.2.4 P. verrucosa procrustes plot
+```{r}
+hp.df.pver <- data.frame(rda1=paco.pver$Yrot[,1],
+rda2=paco.pver$Yrot[,2],xrda1=paco.pver$X[,1],
+xrda2=paco.pver$X[,2]) %>% 
+  tibble::rownames_to_column(var = "Vial") %>% 
+  filter(!Vial %in% c("P ver 033", "P ver 030"))
+
+#left join the metadata to get reef into the dataframe 
+hp.df.pver2 <- hp.df.pver %>% left_join(meta.reef) %>% 
+  mutate(Reef = factor(Reef, levels = c("Osprey","Bougainville", "Moore", "Willis", "Holmes", "Herald", "Lihou", "Flinders", "Marion", "Wreck"))) %>% 
+  left_join(qlong.admix.pver)
+
+procrust.pver <- ggplot(hp.df.pver2) +
+  geom_segment(aes(x=rda1,y=rda2,xend=xrda1,yend=xrda2), size = .2) +
+  geom_point(aes(x=rda1, y=rda2, shape = "Host", color = Reef)) +
+  geom_point(aes(x=xrda1, y=xrda2, shape = "Symbiont", color = Reef)) +
+  scale_shape_manual(name = "Groups", 
+                     values = c("Host" = 19, "Symbiont" = 17)) +
+  scale_colour_manual(values = reef_pal2) +
+    theme(legend.position = "none") +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) +
+  theme(aspect.ratio = 1)
+
+#pver 033, pver 030 need to be removed - failed residual check above 
+```
+
+
+###6.2.5 Test significance 
+```{r}
+#testing significance 
+protest(X = H.dist.pver, Y = P.dist.pver, scores = "sites", permutations = 999)
+```
+
+
+# 6.3 Acropora humilis procrustes
+```{r}
+load("HostAdmix/list.acro.RData")
+#here is the subset with the data that matches the host dartseq data
+seqs_wide_acro_subset.b <- acro_seqs.b %>% 
+  filter(Vial %in% c(list.acro))
+
+
+#now must filter fasta files to correspond to samples in seqs_long subset 
+fasta_acro.b <- read_fasta_df("0_SymPortal/186_20211115_03_DBV_20211116T024440.seqs.fasta") %>%
+  filter(label %in% seqs_wide_acro_subset.b$name) %>%   
+  deframe() %>%
+  as_dna()
+
+#creating the subset symbiont tree
+kdist_acro.b <- fasta_acro.b %>%
+  dna_to_DNAbin() %>%
+  kdistance(k = 7, residues = "DNA", method = "edgar") 
+
+#as a distance matrix
+kdist_acro.b <- as.matrix(kdist_acro.b)
+
+#creating the tree
+k_tree_acro.b <- kdist_acro.b %>% phangorn::upgma()
+
+#subsetting the metadata
+seqs_wide_acro.b <- acro_seqs.b[acro_seqs.b$Vial %in% seqs_wide_acro_subset.b$Vial,] %>% 
+  dplyr::select(Vial, name, value) %>%
+  pivot_wider(names_from = name, values_from = value, values_fill = 0) %>%
+  tibble::column_to_rownames(var = "Vial")
+
+#creating unifrac distance matrix and tree 
+k_unidist_acro.b <- GUniFrac(seqs_wide_acro.b, k_tree_acro.b)   #GUniFrac calculates all the distances 
+k_unidist_acro.b <- k_unidist_acro.b$unifracs
+
+#GUniFrac with alpha 0.5
+du_acro.b <- k_unidist_acro.b[, , "d_0.5"]    # GUniFrac with alpha 0.5 
+dist_acro.b <- as.dist(du_acro.b, diag = FALSE)
+```
+
+###6.3.1 Acropora Dartseq Tree
+```{r}
+load("HostAdmix/gl3.csmp.acro.RData")
+
+library(adegenet)
+
+# calculate a distance matrix
+dist_matrix_acro <- gl.dist.ind(gl3.csmp.acro, method = "euclidean", scale = TRUE)
+# convert the distance matrix to a dist object
+dart.acro.tree <- as.dist(dist_matrix_acro)
+
+```
+
+
+###6.3.2 Subset H and P matrices
+```{r}
+library(vegan)
+
+#convert host (H) and symbiont (P) distance trees as data matrices 
+H.dist.acro <- dart.acro.tree %>% as.matrix()
+P.dist.acro <- dist_acro.b %>% as.matrix()
+
+#must have same number of dimensions 
+dim(H.dist.acro)
+dim(P.dist.acro)
+
+# Subset to only the samples that are in both datasets
+intersect_samples.acro <- intersect(rownames(H.dist.acro), rownames(P.dist.acro))
+P.dist_intersect.acro <- P.dist.acro[intersect_samples.acro, ]
+H.dist_intersect.acro <- H.dist.acro[intersect_samples.acro, ]
+
+# Check that the samples are now aligned
+all(rownames(H.dist_intersect.acro) == rownames(P.dist_intersect.acro))
+
+#re-check dimensions
+dim(H.dist_intersect.acro)
+dim(P.dist_intersect.acro)
+
+#where is the issue with one extra in H dist? 
+setdiff(rownames(H.dist_intersect.acro), rownames(P.dist_intersect.acro))
+setdiff(colnames(H.dist_intersect.acro), colnames(P.dist_intersect.acro))
+
+# Identify the column that is missing in P.dist_intersect
+missing_col.acro <- setdiff(colnames(H.dist_intersect.acro), colnames(P.dist_intersect.acro))
+# P ver 379 
+
+# Remove the missing column from H.dist_intersect
+H.dist_intersect_complete.acro <- H.dist_intersect.acro[, !colnames(H.dist_intersect.acro) %in% missing_col.acro]
+
+# Subset to only the samples that are in both datasets
+intersect_samples.acro <- intersect(rownames(H.dist_intersect_complete.acro), rownames(P.dist_intersect.acro))
+P.dist.acro <- P.dist_intersect.acro[intersect_samples.acro, ]
+H.dist.acro <- H.dist_intersect_complete.acro[intersect_samples.acro, ]
+
+#recheck dimensions - all good 
+dim(P.dist.acro)
+dim(H.dist.acro)
+```
+
+
+```{r}
+#create PCoA of H.Dist and P.dist and see their distances along the axes. 
+
+paco.test.P <- cmdscale(P.dist.acro, eig = TRUE)    #this is doing 'cmds' or classic multidimensional scaling
+paco.test.H <- cmdscale(H.dist.acro, eig = TRUE) 
+
+ordiplot(paco.test.P)
+ordiplot(paco.test.H)
+
+MDSxy.acro.b <- data.frame(pcoa_acro.b$points) %>% 
+  rownames_to_column(var = "Vial") %>% 
+  left_join(., meta) %>% 
+   mutate(catBleaching = as.factor(catBleaching)) %>% 
+  filter(!(Vial %in% outlier_samples)) 
+
+```
+
+
+###6.3.3 Perform Paco analysis
+```{r, include = FALSE}
+# Perform Procrustes analysis. logical that symbionts depend on the host. so X = host and Y = symbiont 
+
+paco.acro <- procrustes(H.dist.acro, P.dist.acro, symmetric = FALSE)
+summary(paco.acro)
+#sum of squares here is ridiculous (over 1 million)
+
+#symmetric = FALSE: This specifies that the Procrustes rotation can be non-orthogonal (i.e. generalised), meaning that it can include scaling and shearing transformations in addition to rotation and reflection. This allows for more flexible alignment between the two dissimilarity matrices, but may result in a less interpretable or meaningful alignment depending on the nature of the data.
+
+
+#check the residuals 
+#paco error chart 
+plot(paco.acro, kind = 1, type = "text")
+
+#show paco residuals. higher numbers mean these are the samples that have high dissimilarity between the symbiont and host trees
+plot(paco.acro, kind = 2, type = "text")
+```
+
+
+### 6.3.4 Acropora procrustes plot
+```{r}
+load("HostAdmix/qlong.acro.RData") #dataframe with host clusters for A. humilis 
+
+hp.df.acro <- data.frame(rda1=paco.acro$Yrot[,1],
+rda2=paco.acro$Yrot[,2],xrda1=paco.acro$X[,1],
+xrda2=paco.acro$X[,2]) %>% 
+  tibble::rownames_to_column(var = "Vial") %>% 
+ filter(!Vial %in% c("A ten 194", "A ten 018"))  
+  
+#new_rows <- data.frame(Reef = c("Willis", "Saumarez"), 
+                    #   Vial = NA,
+                    #   rda1 = NA, rda2 = NA, 
+                    #   xrda1 = NA, xrda2 = NA)
+
+#left join the metadata to get reef into the dataframe 
+hp.df.acro2 <- hp.df.acro %>% left_join(meta.reef) %>% 
+  mutate(Reef = factor(Reef, levels = c("Osprey", "Bougainville", "Moore", "Willis", "Holmes", "Chilcott", "Herald","Lihou", "Flinders", "Marion", "Frederick", "Saumarez", "Wreck"))) %>% 
+  left_join(qlong.acro) %>% 
+  mutate(Cluster = as.factor(variable)) %>% 
+  filter(!is.na(Cluster))
+
+
+acro_k2 <- acro_k %>% select(Vial, k_id)
+hp.df.acro3 <- hp.df.acro2 %>% 
+  left_join(acro_k) %>% 
+  mutate(k_id = as.factor(k_id)) %>% 
+  filter(!is.na(k_id))
+
+#hp.df.acro2 <- rbind(hp.df.acro2, new_rows)
+
+procrust.acro <- ggplot(hp.df.acro2) +
+  geom_segment(aes(x=rda1,y=rda2,xend=xrda1,yend=xrda2), size = .2) +
+  geom_point(aes(x=rda1, y=rda2, shape = "Symbiont", color = Reef)) +
+  geom_point(aes(x=xrda1, y=xrda2, shape = "Host", color = Reef)) +
+  scale_shape_manual(name = "Groups", 
+                     values = c("Host" = 17, "Symbiont" = 19)) +
+  scale_colour_manual(values = reef_pal2, drop = FALSE) +
+      theme(legend.position = "right") +
+ theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+   panel.grid.major = element_blank()) +
+  theme(aspect.ratio = 1) 
+
+
+procrust.acro.clust <- ggplot(hp.df.acro2) +
+  geom_segment(aes(x=rda1,y=rda2,xend=xrda1,yend=xrda2), size = .2) +
+    geom_point(aes(x=rda1, y=rda2, shape = "Symbiont", color = Cluster)) +
+    geom_point(aes(x=xrda1, y=xrda2, shape = "Host", color = Cluster)) +
+  scale_shape_manual(name = "Groups", 
+                     values = c("Host" = 17, "Symbiont" = 19)) +
+  scale_colour_manual(values = clust_pal, drop = FALSE) +
+      theme(legend.position = "right") +
+ theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+   panel.grid.major = element_blank()) +
+  theme(aspect.ratio = 1) 
+
+procrust.acro.clust
+
+
+procrust.acro.kid <- ggplot(hp.df.acro3) +
+  geom_segment(aes(x=rda1,y=rda2,xend=xrda1,yend=xrda2), size = .2) +
+  geom_point(aes(x=rda1, y=rda2, shape = "Symbiont", color = k_id)) +
+  geom_point(aes(x=xrda1, y=xrda2, shape = "Host", color = k_id)) +
+  scale_shape_manual(name = "Groups", 
+                     values = c("Host" = 17, "Symbiont" = 19)) +
+  scale_colour_manual(values = kid_pal, drop = FALSE) +
+      theme(legend.position = "right") +
+ theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+   panel.grid.major = element_blank()) +
+  theme(aspect.ratio = 1) 
+
+procrust.acro.kid
+
+```
+**There is clearly host genetic structure, but the symbionts that are highly structured are from AH1 and AH2 host genetic clusters, which are found in the top of the plot. Symbionts from AH3 are more closely related to the host genetic structure** 
+
+
+
+```{r}
+##sub-panel to include only symbionts of the Acropora Procrustes to better see (not overlaid with host points or segments)
+
+procrust.acro.sym <- ggplot(hp.df.acro2) +
+  #geom_segment(aes(x=rda1,y=rda2,xend=xrda1,yend=xrda2), size = .2) +
+  geom_point(aes(x=rda1, y=rda2, shape = "Symbiont", color = Reef)) +
+  #geom_point(aes(x=xrda1, y=xrda2, shape = "Host", color = Reef)) +
+  scale_shape_manual(name = "Groups", 
+                     values = c("Host" = 17, "Symbiont" = 19)) +
+  scale_colour_manual(values = reef_pal2, drop = FALSE) +
+      theme(legend.position = "right") +
+ theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+   panel.grid.major = element_blank()) +
+  theme(aspect.ratio = 1) 
+```
+
+
+```{r}
+procrust.acro.clust + procrust.acro
+```
+
+
+### 6.3.5 Test significance 
+```{r}
+#testing significance 
+protest(X = H.dist.acro, Y = P.dist.acro, scores = "sites", permutations = 999)
+```
+
+
+# 6.4 Acropora AHCL1 only procrustes
+```{r}
+load("HostAdmix/list.acroC3.RData")
+#here is the subset with the data that matches the host dartseq data
+seqs_wide_acroC3_subset.b <- acro_seqs.b %>% 
+  filter(Vial %in% c(list.acroC3))
+
+
+#now must filter fasta files to correspond to samples in seqs_long subset 
+fasta_acroC3.b <- read_fasta_df("0_SymPortal/186_20211115_03_DBV_20211116T024440.seqs.fasta") %>%
+  filter(label %in% seqs_wide_acroC3_subset.b$name) %>%   
+  deframe() %>%
+  as_dna()
+
+#creating the subset symbiont tree
+kdist_acroC3.b <- fasta_acroC3.b %>%
+  dna_to_DNAbin() %>%
+  kdistance(k = 7, residues = "DNA", method = "edgar") 
+
+#as a distance matrix
+kdist_acroC3.b <- as.matrix(kdist_acroC3.b)
+
+#creating the tree
+k_tree_acroC3.b <- kdist_acroC3.b %>% phangorn::upgma()
+
+#subsetting the metadata
+seqs_wide_acroC3.b <- acro_seqs.b[acro_seqs.b$Vial %in% seqs_wide_acroC3_subset.b$Vial,] %>% 
+  dplyr::select(Vial, name, value) %>%
+  pivot_wider(names_from = name, values_from = value, values_fill = 0) %>%
+  tibble::column_to_rownames(var = "Vial")
+
+#creating unifrac distance matrix and tree 
+k_unidist_acroC3.b <- GUniFrac(seqs_wide_acroC3.b, k_tree_acroC3.b)   #GUniFrac calculates all the distances 
+k_unidist_acroC3.b <- k_unidist_acroC3.b$unifracs
+
+#GUniFrac with alpha 0.5
+du_acroC3.b <- k_unidist_acroC3.b[, , "d_0.5"]    # GUniFrac with alpha 0.5 
+dist_acroC3.b <- as.dist(du_acroC3.b, diag = FALSE)
+```
+
+###6.4.1 Acropora AHCL1 Dartseq Tree
+```{r}
+load("HostAdmix/gl3.csmp.acroC3.RData")
+
+library(adegenet)
+
+# calculate a distance matrix
+dist_matrix_acroC3 <- gl.dist.ind(gl3.csmp.acroC3, method = "euclidean", scale = TRUE)
+# convert the distance matrix to a dist object
+dart.acroC3.tree <- as.dist(dist_matrix_acroC3)
+```
+
+###6.4.2 Subset H and P matrices
+```{r}
+library(vegan)
+
+#convert host (H) and symbiont (P) distance trees as data matrices 
+H.dist.acroC3 <- dart.acroC3.tree %>% as.matrix()
+P.dist.acroC3 <- dist_acroC3.b %>% as.matrix()
+
+#must have same number of dimensions 
+dim(H.dist.acroC3)
+dim(P.dist.acroC3)
+
+# Subset to only the samples that are in both datasets
+intersect_samples.acroC3 <- intersect(rownames(H.dist.acroC3), rownames(P.dist.acroC3))
+P.dist_intersect.acroC3 <- P.dist.acroC3[intersect_samples.acroC3, ]
+H.dist_intersect.acroC3 <- H.dist.acroC3[intersect_samples.acroC3, ]
+
+# Check that the samples are now aligned
+all(rownames(H.dist_intersect.acroC3) == rownames(P.dist_intersect.acroC3))
+
+#re-check dimensions
+dim(H.dist_intersect.acroC3)
+dim(P.dist_intersect.acroC3)
+
+#where is the issue with one extra in H dist? 
+setdiff(rownames(H.dist_intersect.acroC3), rownames(P.dist_intersect.acroC3))
+setdiff(colnames(H.dist_intersect.acroC3), colnames(P.dist_intersect.acroC3))
+
+# Identify the column that is missing in P.dist_intersect
+missing_col.acroC3 <- setdiff(colnames(H.dist_intersect.acroC3), colnames(P.dist_intersect.acroC3))
+# A ten 193
+
+# Remove the missing column from H.dist_intersect
+H.dist_intersect_complete.acroC3 <- H.dist_intersect.acroC3[, !colnames(H.dist_intersect.acroC3) %in% missing_col.acroC3]
+
+# Subset to only the samples that are in both datasets
+intersect_samples.acroC3 <- intersect(rownames(H.dist_intersect_complete.acroC3), rownames(P.dist_intersect.acroC3))
+P.dist.acroC3 <- P.dist_intersect.acroC3[intersect_samples.acroC3, ]
+H.dist.acroC3 <- H.dist_intersect_complete.acroC3[intersect_samples.acroC3, ]
+
+#recheck dimensions - all good 
+dim(P.dist.acroC3)
+dim(H.dist.acroC3)
+
+#201 samples total 
+```
+
+
+###6.4.3 Perform Paco analysis
+```{r, include = FALSE}
+# Perform Procrustes analysis. logical that symbionts depend on the host. so X = host and Y = symbiont 
+
+paco.acroC3 <- procrustes(H.dist.acroC3, P.dist.acroC3, symmetric = FALSE)
+summary(paco.acroC3)
+
+#check residuals 
+#paco error chart 
+plot(paco.acroC3, kind = 1, type = "text")
+
+#show paco residuals. higher numbers mean these are the samples that have high dissimilarity between the symbiont and host trees
+plot(paco.acroC3, kind = 2, type = "text")
+```
+
+
+###6.4.4 Acropora AHCL1 procrustes plot
+```{r}
+hp.df.acroC3 <- data.frame(rda1=paco.acroC3$Yrot[,1],
+rda2=paco.acroC3$Yrot[,2],xrda1=paco.acroC3$X[,1],
+xrda2=paco.acroC3$X[,2]) %>% 
+  tibble::rownames_to_column(var = "Vial") %>% 
+ filter(!Vial %in% c("A ten 194", "A ten 216", "A ten 282"))  #filter 3 outliers
+
+#left join the metadata to get reef into the dataframe 
+hp.df.acroC3.2 <- hp.df.acroC3 %>% left_join(meta.reef) %>% 
+  mutate(Reef = factor(Reef, levels = c("Osprey", "Bougainville", "Moore", "Willis", "Holmes", "Chilcott", "Herald","Lihou", "Flinders", "Marion", "Frederick", "Saumarez", "Wreck"))) 
+
+procrust.acroC3 <- ggplot(hp.df.acroC3.2) +
+  geom_segment(aes(x=rda1,y=rda2,xend=xrda1,yend=xrda2), size = .2) +
+  geom_point(aes(x=rda1, y=rda2, shape = "Host", color = Reef)) +
+  geom_point(aes(x=xrda1, y=xrda2, shape = "Symbiont", color = Reef)) +
+  scale_shape_manual(name = "Groups", 
+                     values = c("Host" = 17, "Symbiont" = 19)) +
+  scale_colour_manual(values = reef_pal2) +
+      theme(legend.position = "none") +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) +
+  theme(aspect.ratio = 1)
+  
+
+procrust.acroC3
+```
+
+```{r}
+procrust.acroC3 + procrust.acro
+```
+
+
+###6.4.5 Test significance 
+```{r}
+#testing significance 
+protest(X = H.dist.acroC3, Y = P.dist.acroC3, scores = "sites", permutations = 999)
+```
+
+#6.5 Fig 3 Procrustes
+```{r}
+procrust.pmea + procrust.pver + procrust.acro + procrust.acro.sym
+```
+
+
+# 7 dbRDA subset models 
+
+### 7.1 Pmea Hap8 dbRDA subset
+```{r}
+#metadata for subset of genetic samples 
+load("HostAdmix/qlong.pmea.RData")
+qlong.pmea <- qlong.pmea %>% dplyr::rename(Vial = Ind)
+
+meta.pmea.admix <- hp.df.pmea %>% left_join(meta) %>% 
+  left_join(qlong.pmea) %>% 
+  tibble::column_to_rownames(var = "Vial") %>%
+  mutate(sample_name = rownames(.))
+
+#importing unifrac distances for analysis 
+dist_pmh8_ordered <- dist_subset(dist_pmh8, rownames(meta.pmea.admix))
+
+# Make a correlation matrix of numeric variables
+cm <- cor(meta.pmea.admix %>% select(Depth, maxDHW, MMM, DHW2020, Lat, Long, admix1))
+
+corrplot(cm) # Clearly a lot of the DHW terms are positively related and approaching redundant
+
+# Check the vif scores of the full model
+ord_pmh8_full <- dbrda(dist_pmh8_ordered ~ Lat + Long + MMM + Depth + catBleaching + DHW2020 + maxDHW + admix1, data = meta.pmea.admix)
+
+sort(vif.cca(ord_pmh8_full))
+
+   #    Depth catBleaching       admix1       maxDHW      DHW2020          Lat         Long 
+   # 1.208572     1.459430     1.547302     3.526390     9.296066    23.277907    28.248336 
+  #       MMM 
+  # 32.315842 
+
+# Reduce the model (consult the corplot and vif scores)
+ord_pmh8 <- dbrda(dist_pmh8_ordered ~  Lat + admix1 + Depth + catBleaching + DHW2020 + maxDHW, data = meta.pmea.admix)
+
+# Re check the new vif scores
+sort(vif.cca(ord_pmh8))
+     #  Depth catBleaching       admix1       maxDHW      DHW2020          Lat 
+   # 1.162181     1.344646     1.531987     1.962000     6.066496     7.006022 
+
+# Use ordistep to further refine the model
+ord_pmh8_backward <- ordistep(ord_pmh8, direction = "backward", permutations = 999)
+anova(ord_pmh8_backward, by = 'margin')
+
+#Model: dbrda(formula = dist_pmh8_ordered ~ Lat + admix1 + catBleaching, data = meta.pmea.admix)
+           #  Df SumOfSqs       F Pr(>F)    
+#Lat           1  0.08199  4.5678  0.006 ** 
+#admix1        1  0.30430 16.9522  0.001 ***
+#catBleaching  1  0.04080  2.2730  0.063 .  
+#Residual     62  1.11291         
+
+
+#variance partitioning: how much does each variable explain in the model? residuals? 
+varp <- varpart(dist_pmh8_ordered, ~admix1, ~Lat, data = meta.pmea.admix)
+plot(varp, digits = 2, Xnames = c("admix1", "Lat"), bg = c("navy", "tomato"))
+
+meta.pmea.admix <- meta.pmea.admix %>% 
+  tibble::rownames_to_column(var = "Vial")
+
+#extract scores (values assigned to Vials) from dbRDA 
+pmh8_scores <- as.data.frame(ord_pmh8_backward$CCA$wa)  %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta.pmea.admix)
+
+#extract vectors from dbRDA 
+pmh8_vectors <- as.data.frame(ord_pmh8_backward$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+pmh8_fullrda <- pmh8_scores %>%
+ # mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = admix1), size = 4, shape = 21) +
+        geom_label_repel(data = pmh8_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.5, size = 4, segment.colour = NA) +
+      geom_segment(data = pmh8_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+     guides(fill = guide_colorbar (reverse = T)) +
+      scale_fill_viridis_c(option = "magma", direction = -1) +
+     theme(legend.position = "none") +
+    theme(aspect.ratio = 1, text = element_text(size = 15)) +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank())
+
+pmh8_fullrda
+```
+
+### 7.2 Pver dbRDA subset
+```{r}
+#metadata for subset of genetic samples 
+load("HostAdmix/qlong.pver.RData")
+qlong.pver <- qlong.pver %>% dplyr::rename(Vial = Ind)
+
+meta.pver.admix <- hp.df.pver %>% left_join(meta) %>% 
+  left_join(qlong.pver) %>% 
+  tibble::column_to_rownames(var = "Vial") %>%
+  mutate(sample_name = rownames(.))
+
+#importing unifrac distances for analysis 
+dist_pver_ordered <- dist_subset(dist_pver.b, rownames(meta.pver.admix))
+
+# Make a correlation matrix of numeric variables
+cm <- cor(meta.pver.admix %>% select(Depth, maxDHW, MMM, DHW2020, Lat, Long, Admix1))
+
+#plot the correlation matrix 
+corrplot(cm)
+
+# Check the vif scores of the full model
+ord_pver_full <- dbrda(dist_pver_ordered ~ Lat + Long + MMM + Depth + catBleaching + DHW2020 + maxDHW + Admix1, data = meta.pver.admix)
+
+sort(vif.cca(ord_pver_full))
+
+#catBleaching        Depth       Admix1      DHW2020       maxDHW         Long          Lat 
+   # 1.041797     1.060280     1.161862     2.910195     3.174333    11.451527    18.773658 
+      #   MMM 
+  # 25.700030 
+
+# Reduce the model (consult the corplot and vif scores)
+ord_pver <- dbrda(dist_pver_ordered ~ Lat + Admix1 + Depth + catBleaching + DHW2020 + maxDHW, data = meta.pver.admix)
+
+# Re check the new vif scores
+sort(vif.cca(ord_pver))
+
+ #   Depth catBleaching       maxDHW       Admix1      DHW2020          Lat 
+ #   1.029996     1.041313     1.120853     1.126720     2.668906     2.789139 
+
+# Use ordistep to further refine the model
+ord_pver_backward <- ordistep(ord_pver, direction = "backward", permutations = 999)
+anova(ord_pver_backward, by = 'margin')
+
+#          Df SumOfSqs      F Pr(>F)  
+#Admix1     1  0.05024 2.2661  0.045 *
+#Depth      1  0.04013 1.8103  0.069 .
+#maxDHW     1  0.04125 1.8608  0.078 .
+#Residual 126  2.79342           
+
+
+#variance partitioning: how much does each variable explain in the model? residuals? 
+varp <- varpart(dist_pver_ordered,  ~Admix1, ~Depth, data = meta.pver.admix)
+plot(varp, digits = 2, Xnames = c("Admix1", "Depth"), bg = c("navy", "tomato"))
+
+meta.pver.admix <- meta.pver.admix %>% 
+  tibble::rownames_to_column(var = "Vial")
+
+#extract scores (values assigned to Vials) from dbRDA 
+pver_scores <- as.data.frame(ord_pver_backward$CCA$wa)  %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta.pver.admix)
+
+#extract vectors from dbRDA 
+pver_vectors <- as.data.frame(ord_pver_backward$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+pver_fullrda <- pver_scores %>%
+ # mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = Admix1), size = 4, shape = 21) +
+      geom_label_repel(data = pver_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.5, size = 4, segment.colour = NA) +
+      geom_segment(data = pver_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+     guides(fill = guide_colorbar (reverse = T)) +
+      scale_fill_viridis_c(option = "magma", direction = -1) +
+     theme(legend.position = "none") +
+    theme(aspect.ratio = 1, text = element_text(size = 15)) +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank())
+
+pver_fullrda
+```
+
+
+## 7.3 Acro dbRDA subset
+**Is recent.maxDHW still an important factor when we account for cryptic speciation of the host?**
+```{r}
+#metadata for subset of genetic samples 
+load("HostAdmix/qlong.acro.RData")
+qlong.acro <- qlong.acro %>% 
+  select(Vial, Cluster = variable) %>% 
+  mutate(Cluster = as.factor(Cluster)) 
+
+
+meta.acro.admix <- hp.df.acro %>% left_join(meta) %>% 
+  left_join(qlong.acro) %>% 
+  tibble::column_to_rownames(var = "Vial") %>%
+  mutate(sample_name = rownames(.)) %>% 
+  filter(!is.na(Cluster))
+
+#importing unifrac distances for analysis 
+dist_acro_ordered <- dist_subset(dist_acro, rownames(meta.acro.admix)) 
+
+# Make a correlation matrix of numeric variables to check for collinearity b/w enviro variables 
+cm <- cor(meta.acro.admix %>% select(Depth, maxDHW, MMM, DHW2020, Lat, Long))
+corrplot(cm) 
+
+# Check the vif scores of the full model
+ord_acro_full <- dbrda(dist_acro_ordered ~ Lat + Long + MMM + Depth + catBleaching + DHW2020 + maxDHW + Cluster, data = meta.acro.admix)
+
+sort(vif.cca(ord_acro_full))
+        #Cluster 2     catBleaching ClusterCluster 3            Depth           maxDHW 
+      #  1.110988         1.296179         1.332315         1.416315         2.423330 
+       #  DHW2020             Long              Lat              MMM 
+       # 3.832742        15.717073        28.149683        49.447834 
+
+# Reduce the model (consult the corplot and vif scores)
+ord_acro <- dbrda(dist_acro_ordered ~  Lat + Cluster + Depth + catBleaching + DHW2020 + maxDHW, data = meta.acro.admix)
+
+# Re check the new vif scores
+sort(vif.cca(ord_acro))
+       #Cluster 2       Cluster 3     catBleaching            Depth           maxDHW 
+       # 1.085056         1.236455         1.255009         1.278357         1.696793 
+        # DHW2020              Lat 
+       # 3.823198         4.136709 
+
+
+# Reduce the model (consult the corplot and vif scores)
+ord_acro <- dbrda(dist_acro_ordered ~ Lat + Cluster + Depth + catBleaching + DHW2020 + maxDHW, data = meta.acro.admix)
+
+# Use ordistep to further refine the model
+ord_acro_backward <- ordistep(ord_acro, direction = "backward", permutations = 999)
+anova(ord_acro_backward, by = 'margin')
+
+ #Model: dbrda(formula = dist_acro_ordered ~ Lat + Cluster + Depth + catBleaching + DHW2020 + maxDHW, data = meta.acro.admix)
+     #         Df SumOfSqs       F Pr(>F)    
+#Lat            1  0.01494  5.4055  0.001 ***
+#Cluster        2  0.01075  1.9453  0.038 *  
+#Depth          1  0.00888  3.2121  0.021 *  
+#catBleaching   1  0.00684  2.4759  0.027 *  
+#DHW2020        1  0.02112  7.6438  0.001 ***
+#maxDHW         1  0.04052 14.6620  0.001 ***
+#Residual     247  0.68262                            
+
+
+#variance partitioning: how much does each variable explain in the model? residuals? 
+varp <- varpart(dist_acro_ordered,  ~Lat, ~Cluster, ~varSST, ~recent.maxDHW, data = meta.acro.admix)
+plot(varp, digits = 2, Xnames = c("Lat", "Cluster", "varSST", "recent.maxDHW"), bg = c("navy", "tomato", "orange", "green"))
+
+#extract scores from dbRDA 
+meta.acro.admix <- meta.acro.admix %>% 
+  tibble::rownames_to_column(var = "Vial")
+
+#extract scores (values assigned to Vials) from dbRDA 
+acro_scores <- as.data.frame(ord_acro_backward$CCA$wa)  %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta.acro.admix)
+
+#extract vectors from dbRDA 
+acro_vectors <- as.data.frame(ord_acro_backward$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+acro_fullrda <- acro_scores %>%
+ # mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = Lat), size = 4, shape = 21) +
+      geom_label_repel(data = acro_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.5, size = 4, segment.colour = NA) +
+      geom_segment(data = acro_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+     guides(fill = guide_colorbar (reverse = T)) +
+      scale_fill_viridis_c(option = "magma", direction = -1) +
+     theme(legend.position = "right") +
+    theme(aspect.ratio = 1, text = element_text(size = 15)) +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank())
+
+acro_fullrda
+```
+
+
+```{r}
+pmh8_fullrda + pver_fullrda + acro_fullrda
+```
+
+
+**Because we see an influence of genetic cluster on the environmental factors, we will look specifically at the main Acropora host cluster to see what environmental drivers are an influence. It is difficult to draw any conclusion from environment when there are interactions b/w where host are, and what environmental patterns they experience** 
+
+##7.4 Acro AHCL1 only dbRDA subset
+```{r}
+#metadata for subset of genetic samples 
+load("HostAdmix/qlong.acroC3.RData")
+qlong.acroC3 <- qlong.acroC3 %>% 
+  select(Vial = Ind, Admix1)
+
+
+meta.acroC3.admix <- hp.df.acroC3 %>% left_join(meta) %>% 
+  left_join(qlong.acroC3) %>% 
+  tibble::column_to_rownames(var = "Vial") %>%
+  mutate(sample_name = rownames(.)) 
+
+#importing unifrac distances for analysis 
+dist_acroC3_ordered <- dist_subset(dist_acroC3.b, rownames(meta.acroC3.admix)) 
+
+# Make a correlation matrix of numeric variables
+cm <- cor(meta.acroC3.admix %>% select(Depth, maxDHW, MMM, DHW2020, Lat, Long))
+
+corrplot(cm) # A lot of the DHW terms are positively related and approaching redundant
+
+
+# Check the vif scores of the full model
+ord_acroC3_full <- dbrda(dist_acroC3_ordered ~ Lat + Long + MMM + Depth + catBleaching + DHW2020 + maxDHW, data = meta.acroC3.admix)
+
+
+sort(vif.cca(ord_acroC3_full))
+#catBleaching        Depth       maxDHW      DHW2020         Long          Lat          MMM 
+  #  1.270005     1.316018     2.135333     3.187346    12.420998    22.481312    42.195356 
+
+# Reduce the model (consult the corplot and vif scores)
+ord_acroC3 <- dbrda(dist_acroC3_ordered ~ Lat +  Depth + catBleaching + DHW2020 + maxDHW, data = meta.acroC3.admix)
+
+# Re check the new vif scores
+sort(vif.cca(ord_acroC3))
+    #    Depth catBleaching       maxDHW      DHW2020          Lat 
+   # 1.179277     1.228988     1.549795     3.182677     3.345252 
+
+# Use ordistep to further refine the model
+ord_acroC3_backward <- ordistep(ord_acroC3, direction = "backward", permutations = 999)
+anova(ord_acroC3_backward, by = 'margin')
+             
+#Model: dbrda(formula = dist_acroC3_ordered ~ Lat + Depth + DHW2020 + maxDHW, data = meta.acroC3.admix)
+     #     Df SumOfSqs       F Pr(>F)    
+#Lat        1  0.01924  5.9379  0.002 ** 
+#Depth      1  0.00969  2.9905  0.021 *  
+#DHW2020    1  0.02197  6.7812  0.001 ***
+#maxDHW     1  0.04561 14.0789  0.001 ***
+#Residual 193  0.62529                   
+
+#variance partitioning: how much does each variable explain in the model? residuals? 
+varp <- varpart(dist_acroC3_ordered,  ~Depth, ~maxDHW, ~Lat, ~DHW2020, data = meta.acroC3.admix)
+plot(varp, digits = 2, Xnames = c("Depth", "maxDHW", "Lat", "DHW2020"), bg = c("navy", "tomato", "orange", "green"))
+
+#extract scores from dbRDA 
+meta.acroC3.admix <- meta.acroC3.admix %>% 
+  tibble::rownames_to_column(var = "Vial")
+
+#extract scores (values assigned to Vials) from dbRDA 
+acroC3_scores <- as.data.frame(ord_acroC3_backward$CCA$wa)  %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta.acroC3.admix)
+
+#extract vectors from dbRDA 
+acroC3_vectors <- as.data.frame(ord_acroC3_backward$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+acroC3_fullrda <- acroC3_scores %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = Lat), size = 4, shape = 21) +
+      geom_label_repel(data = acroC3_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.5, size = 4, segment.colour = NA) +
+      geom_segment(data = acroC3_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+     guides(fill = guide_colorbar (reverse = T)) +
+      scale_fill_viridis_c(option = "magma", direction = -1) +
+     theme(legend.position = "right") +
+    theme(aspect.ratio = 1, text = element_text(size = 15)) +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) 
+
+acroC3_fullrda
+```
+
+
+```{r}
+#Compaison between full acropora dbRDA (left) and a dbRDA containing only the main host cluster AHCL1
+acro_fullrda + acroC3_fullrda
+```
+
+
+```{r}
+clust_pal <- c("#768b45", "#a9be77")
+
+clust_names <- c("ClatN", "ClatS")
+
+names(clust_pal) <- clust_names
+
+poci.pie <- poci_k %>% 
+  filter(mtORF != "Pverrucosa") %>% 
+  filter(k_id != "Cpac") %>% 
+  group_by(Reef, k_id) %>% 
+  dplyr::summarise(n = n()) %>% 
+    group_by(Reef) %>%
+  mutate(proportion = n / sum(n) * 100)
+
+poci.pie
+
+ggplot(poci.pie, aes(x = "", y = n, fill = factor(k_id))) +
+  geom_bar(position="fill", stat="identity") + coord_polar("y")+
+  facet_wrap( ~ Reef) +
+  scale_fill_manual(values = clust_pal) +
+  theme_classic()+
+  theme(legend.position = c(0.8, 0.15), 
+        axis.title=element_blank(), 
+        axis.line=element_blank(),
+        axis.ticks=element_blank(), 
+        axis.text=element_blank(),
+        plot.background = element_blank(), 
+        plot.title=element_text(color="black",size=10,face="plain",hjust=0.5),
+        strip.background = element_blank())
+
+```
+
+
+```{r}
+C3prop <- acro_k %>%
+  group_by(Reef, k_id) %>%
+  summarise(n = n()) %>%
+  group_by(Reef) %>%
+  mutate(proportion = n / sum(n) * 100)
+```
+
+```{r}
+meta_acro.heat <- meta_acro %>% select(Reef, maxDHW, recent.maxDHW, DHW2020, Lat, Long) %>% 
+    group_by(Reef) %>%
+   summarise(
+    maxDHW_mean = round(mean(maxDHW), 2),
+    recent.maxDHW_mean = round(mean(recent.maxDHW), 2),
+    DHW2020_mean = round(mean(DHW2020), 2),
+    Lat_mean = round(mean(Lat), 2), 
+    Long_mean = round(mean(Long), 2))
+
+C3prop.heat <- C3prop %>% left_join(meta_acro.heat)
+```
