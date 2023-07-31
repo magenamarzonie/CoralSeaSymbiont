@@ -1,0 +1,192 @@
+---
+title: "1.2_Procrustes"
+output: html_document
+date: "2023-05-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Load libraries
+```{r, include=FALSE}
+library(dartR)
+library(adegenet)
+library(poppr)
+library(hierfstat)
+library(reshape2)
+library(ggplot2)
+library(RColorBrewer)
+library(scales)
+library(dplyr)
+```
+
+
+```{r, include = FALSE}
+gl <- gl.read.dart(filename = "Report_DAc22-6709_SNP_mapping_2.csv", covfilename = "Ahum_CSMP_LIMS.csv")
+
+gl <- gl.drop.ind(gl, 
+                    ind.list= c("A ten 271", "A ten 289"))
+
+m <- as.matrix(gl)
+```
+
+
+
+```{r}
+#filter to gl3 parameters for the csmp subset. 
+gl <- gl.filter.secondaries(gl)
+nLoc(gl)
+
+#filter loci with reproducibility below a particular threshold
+gl.report.reproducibility(gl)
+gl <- gl.filter.reproducibility(gl, threshold = 0.98)
+
+nLoc(gl)
+
+#filter loci with >5% missing data. this is standard. Note that this is different call rate filter to the regional based on we are only looking at Coral Sea here 
+gl2 <- gl.filter.callrate(gl, method = "loc", threshold = 0.90)
+nLoc(gl2)
+
+
+gl.report.callrate(gl2)
+
+#filter read depth < 5x
+gl2 <- gl.filter.rdepth(gl2, lower = 5, upper = 200, verbose = 3)
+nLoc(gl2)
+
+```
+
+##MAF filtering 
+```{r}
+#We will filter out loci with a MAF less than 0.05.**
+gl3.csmp.acro <- gl.filter.maf(gl2, threshold = 0.95) 
+
+#report for MAF after filtering with MAF < 0.05 
+gl.report.maf(gl3.csmp.acro)
+nLoc(gl3.csmp.acro)
+#1951 SNPs remaining 
+
+gl3.csmp.acro <- gl.impute(
+  gl3.csmp.acro,
+  method = "neighbour",
+  fill.residual = TRUE,
+  parallel = FALSE,
+  verbose = NULL
+)
+
+nInd(gl3.csmp.acro)
+
+#save(gl3.csmp.pmea, file = "gl3.csmp.pmea.RData")
+
+list.acro <- indNames(gl3.csmp.acro)
+save(list.acro, file = "list.acro.RData")
+
+save(gl3.csmp.acro, file = "gl3.csmp.acro.RData")
+```
+
+
+
+
+#Admixture plots 
+```{r}
+library(LEA)
+## Here we are moving on to the LEA package in order to estimate K clusters and create admixture plots 
+```
+
+```{r}
+gl2geno(gl3.csmp.acro, outfile = "gl_geno", outpath = getwd(), verbose = NULL)
+```
+
+```{r, include = FALSE}
+pc = pca("gl_geno.lfmm", scale = TRUE)
+tw = tracy.widom(pc)
+
+#Plots the percentage of variance explained by eah component. You can look at the 'elbow' to inform the number of genetic clusers. It looks like ours is between 3-5.
+plot(tw$percentage, pch = 19, col = "darkblue", cex = .8)
+```
+
+
+#Run snmf algorithm
+```{r, include = FALSE}
+snmf1 = snmf("gl_geno.geno",
+        K = 1:10,    #number of K ancestral populations to run
+        entropy = TRUE,     #calculate cross-entropy
+        repetitions = 10,    #10 repetitions for each K
+        project = "new")
+
+plot(snmf1, col = "blue", cex = 1.5, pch = 19)
+```
+
+
+```{r}
+# Extract the cross-entropy of all runs where K = 2
+ce = cross.entropy(snmf1, K = 3)
+ce
+
+lowest.ce = which.min(ce)
+lowest.ce
+```
+
+```{r}
+qmatrix = as.data.frame(Q(snmf1, K = 3, run = lowest.ce))
+head(qmatrix)
+
+# Label column names of qmatrix
+ncol(qmatrix)
+cluster_names = c()
+for (i in 1:ncol(qmatrix)){
+  cluster_names[i] = paste("Cluster", i)
+}
+cluster_names
+colnames(qmatrix) = cluster_names
+head(qmatrix)
+
+qmatrix
+```
+
+
+##Converting to a genlight object for downstream analysis 
+```{r}
+#converting a genlight object (we have) to a genind object so we can look at genetic data at an individual data using adegenet package. 
+acro_gen <- gl2gi(gl3.csmp.acro, probar = FALSE, verbose = NULL)
+acro_gen
+
+is.genind(acro_gen)
+```
+
+
+```{r}
+# Add individual IDs
+qmatrix$Ind = indNames(acro_gen)
+
+#Add site IDs
+qmatrix$Site = acro_gen$pop
+head(qmatrix)
+
+#Convert dataframe to long format
+qlong = melt(qmatrix, id.vars=c("Ind","Site"))
+qlong
+
+```
+
+
+```{r}
+#assigning each sample as one of the 3 clusters, whichever is > 50% of sample proportion 
+qlong
+qlongC1 <- qlong %>% dplyr::filter(variable == "Cluster 1") %>% 
+  filter(value > 0.5)
+
+qlongC2 <- qlong %>% dplyr::filter(variable == "Cluster 2") %>% 
+  filter(value > 0.5)
+
+qlongC3 <- qlong %>% dplyr::filter(variable == "Cluster 3") %>% 
+  filter(value > 0.5)
+
+qlongC1C2 <- qlongC1 %>% full_join(qlongC2)
+
+qlong.acro <- qlongC1C2 %>% full_join(qlongC3) %>% 
+  rename(Vial = Ind)
+
+save(qlong.acro, file = "qlong.acro.RData")
+```
