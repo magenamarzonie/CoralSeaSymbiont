@@ -10,7 +10,8 @@ Authors: Magena R. Marzonie, Matthew R. Nitschke, Line K. Bay, David G. Bourne, 
   6. Procrustes rotation analysis <br>
   7. distance-based RDA subset models with host genetic data <br>
 
-Other files to run scripts <br>
+Other files needed to run scripts <br>
+<br>
 **O_SymPortal** folder contains post-med sequence analysis of symbiont DIVs and Type Profiles which are required to run 1_Analysis <br>
 
 **HostAdmix** folder contains .Rdata files for running any code containing the host Dart-sequencing data. This folder is needed to run 1_Analysis scripts. <br>
