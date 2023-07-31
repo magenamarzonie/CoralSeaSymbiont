@@ -1,0 +1,163 @@
+﻿PlateID,Row,Column,Organism,Species,id,Tissue,Comments,pop,Region,lat,lon
+1,A,1,Pocillopora,Verrucosa,P ver 030,unknown,none,Wreck,Coral Sea,22.19267,155.33405
+1,B,1,Pocillopora,Verrucosa,P ver 033,unknown,none,Wreck,Coral Sea,22.19267,155.33405
+1,C,1,Pocillopora,Verrucosa,P ver 036,unknown,none,Wreck,Coral Sea,22.19267,155.33405
+1,D,1,Pocillopora,Verrucosa,P ver 114,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+1,E,1,Pocillopora,Verrucosa,P ver 115,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+1,F,1,Pocillopora,Verrucosa,P ver 116,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+1,G,1,Pocillopora,Verrucosa,P ver 117,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+1,H,1,Pocillopora,Verrucosa,P ver 118,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+1,A,2,Pocillopora,Verrucosa,P ver 119,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+1,B,2,Pocillopora,Verrucosa,P ver 120,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+1,C,2,Pocillopora,Verrucosa,P ver 121,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+1,D,2,Pocillopora,Verrucosa,P ver 122,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+1,E,2,Pocillopora,Verrucosa,P ver 385,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+1,F,2,Pocillopora,Verrucosa,P ver 386,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+1,G,2,Pocillopora,Verrucosa,P ver 388,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+1,H,2,Pocillopora,Verrucosa,P ver 389,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+1,A,3,Pocillopora,Verrucosa,P ver 390,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+1,B,3,Pocillopora,Verrucosa,P ver 392,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+1,C,3,Pocillopora,Verrucosa,P ver 244,unknown,none,Moore,Coral Sea,15.89218,149.15359
+1,D,3,Pocillopora,Verrucosa,P ver 261,unknown,none,Moore,Coral Sea,15.89218,149.15359
+1,E,3,Pocillopora,Verrucosa,P ver 262,unknown,none,Moore,Coral Sea,15.89218,149.15359
+1,F,3,Pocillopora,Verrucosa,P ver 264,unknown,none,Moore,Coral Sea,15.89218,149.15359
+1,G,3,Pocillopora,Verrucosa,P ver 268,unknown,none,Moore,Coral Sea,15.89218,149.15359
+1,H,3,Pocillopora,Verrucosa,P ver 348,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+1,A,4,Pocillopora,Verrucosa,P ver 350,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+1,B,4,Pocillopora,Verrucosa,P ver 352,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+1,C,4,Pocillopora,Verrucosa,P ver 354,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+1,D,4,Pocillopora,Verrucosa,P ver 359,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+1,E,4,Pocillopora,Verrucosa,P ver 360,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+1,F,4,Pocillopora,Verrucosa,P ver 362,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+1,G,4,Pocillopora,Verrucosa,P ver 363,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+1,H,4,Pocillopora,Verrucosa,P ver 364,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+1,A,5,Pocillopora,Verrucosa,P ver 081,unknown,none,Marion,Coral Sea,18.98541,152.34488
+1,B,5,Pocillopora,Verrucosa,P ver 083,unknown,none,Marion,Coral Sea,18.98541,152.34488
+1,C,5,Pocillopora,Verrucosa,P ver 088,unknown,none,Marion,Coral Sea,18.98541,152.34488
+1,D,5,Pocillopora,Verrucosa,P ver 090,unknown,none,Marion,Coral Sea,18.98541,152.34488
+1,E,5,Pocillopora,Verrucosa,P ver 093,unknown,none,Marion,Coral Sea,18.98541,152.34488
+1,F,5,Pocillopora,Verrucosa,P ver 098,unknown,none,Marion,Coral Sea,18.98541,152.34488
+1,G,5,Pocillopora,Verrucosa,P ver 099,unknown,none,Marion,Coral Sea,18.98541,152.34488
+1,H,5,Pocillopora,Verrucosa,P ver 220,unknown,none,Willis,Coral Sea,16.28728,149.9593
+1,A,6,Pocillopora,Verrucosa,P ver 222,unknown,none,Willis,Coral Sea,16.28728,149.9593
+1,B,6,Pocillopora,Verrucosa,P ver 223,unknown,none,Willis,Coral Sea,16.28728,149.9593
+1,C,6,Pocillopora,Verrucosa,P ver 224,unknown,none,Willis,Coral Sea,16.28728,149.9593
+1,D,6,Pocillopora,Verrucosa,P ver 225,unknown,none,Willis,Coral Sea,16.28728,149.9593
+1,E,6,Pocillopora,Verrucosa,P ver 226,unknown,none,Willis,Coral Sea,16.28728,149.9593
+1,F,6,Pocillopora,Verrucosa,P ver 227,unknown,none,Willis,Coral Sea,16.28728,149.9593
+1,G,6,Pocillopora,Verrucosa,P ver 295,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+1,H,6,Pocillopora,Verrucosa,P ver 296,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+1,A,7,Pocillopora,Verrucosa,P ver 297,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+1,B,7,Pocillopora,Verrucosa,P ver 298,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+1,C,7,Pocillopora,Verrucosa,P ver 299,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+1,D,7,Pocillopora,Verrucosa,P ver 300,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+1,E,7,Pocillopora,Verrucosa,P ver 301,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+1,F,7,Pocillopora,Verrucosa,P ver 302,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+2,A,1,Pocillopora,Verrucosa,P ver 040,unknown,none,Wreck,Coral Sea,22.19267,155.33405
+2,B,1,Pocillopora,Verrucosa,P ver 045,unknown,none,Wreck,Coral Sea,22.19267,155.33405
+2,C,1,Pocillopora,Verrucosa,P ver 046,unknown,none,Wreck,Coral Sea,22.19267,155.33405
+2,D,1,Pocillopora,Verrucosa,P ver 123,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+2,E,1,Pocillopora,Verrucosa,P ver 124,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+2,F,1,Pocillopora,Verrucosa,P ver 125,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+2,G,1,Pocillopora,Verrucosa,P ver 126,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+2,H,1,Pocillopora,Verrucosa,P ver 127,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+2,A,2,Pocillopora,Verrucosa,P ver 128,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+2,B,2,Pocillopora,Verrucosa,P ver 129,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+2,C,2,Pocillopora,Verrucosa,P ver 130,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+2,D,2,Pocillopora,Verrucosa,P ver 132,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+2,E,2,Pocillopora,Verrucosa,P ver 149,unknown,none,Herald,Coral Sea,16.94348,149.18565
+2,F,2,Pocillopora,Verrucosa,P ver 150,unknown,none,Herald,Coral Sea,16.94348,149.18565
+2,G,2,Pocillopora,Verrucosa,P ver 151,unknown,none,Herald,Coral Sea,16.94348,149.18565
+2,H,2,Pocillopora,Verrucosa,P ver 153,unknown,none,Herald,Coral Sea,16.94348,149.18565
+2,A,3,Pocillopora,Verrucosa,P ver 156,unknown,none,Herald,Coral Sea,16.94348,149.18565
+2,B,3,Pocillopora,Verrucosa,P ver 157,unknown,none,Herald,Coral Sea,16.94348,149.18565
+2,C,3,Pocillopora,Verrucosa,P ver 192,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,D,3,Pocillopora,Verrucosa,P ver 193,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,E,3,Pocillopora,Verrucosa,P ver 194,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,F,3,Pocillopora,Verrucosa,P ver 195,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,G,3,Pocillopora,Verrucosa,P ver 196,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,H,3,Pocillopora,Verrucosa,P ver 199,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,A,4,Pocillopora,Verrucosa,P ver 269,unknown,none,Moore,Coral Sea,15.89218,149.15359
+2,B,4,Pocillopora,Verrucosa,P ver 270,unknown,none,Moore,Coral Sea,15.89218,149.15359
+2,C,4,Pocillopora,Verrucosa,P ver 274,unknown,none,Moore,Coral Sea,15.89218,149.15359
+2,D,4,Pocillopora,Verrucosa,P ver 278,unknown,none,Moore,Coral Sea,15.89218,149.15359
+2,E,4,Pocillopora,Verrucosa,P ver 279,unknown,none,Moore,Coral Sea,15.89218,149.15359
+2,F,4,Pocillopora,Verrucosa,P ver 101,unknown,none,Marion,Coral Sea,18.98541,152.34488
+2,G,4,Pocillopora,Verrucosa,P ver 103,unknown,none,Marion,Coral Sea,18.98541,152.34488
+2,H,4,Pocillopora,Verrucosa,P ver 109,unknown,none,Marion,Coral Sea,18.98541,152.34488
+2,A,5,Pocillopora,Verrucosa,P ver 110,unknown,none,Marion,Coral Sea,18.98541,152.34488
+2,B,5,Pocillopora,Verrucosa,P ver 111,unknown,none,Marion,Coral Sea,18.98541,152.34488
+2,C,5,Pocillopora,Verrucosa,P ver 113,unknown,none,Marion,Coral Sea,18.98541,152.34488
+2,D,5,Pocillopora,Verrucosa,P ver 281,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+2,E,5,Pocillopora,Verrucosa,P ver 282,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+2,F,5,Pocillopora,Verrucosa,P ver 285,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+2,G,5,Pocillopora,Verrucosa,P ver 287,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+2,H,5,Pocillopora,Verrucosa,P ver 289,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+2,A,6,Pocillopora,Verrucosa,P ver 293,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+2,B,6,Pocillopora,Verrucosa,P ver 294,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+2,C,6,Pocillopora,Verrucosa,P ver 210,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,D,6,Pocillopora,Verrucosa,P ver 212,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,E,6,Pocillopora,Verrucosa,P ver 215,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,F,6,Pocillopora,Verrucosa,P ver 217,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,G,6,Pocillopora,Verrucosa,P ver 218,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,H,6,Pocillopora,Verrucosa,P ver 219,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+2,A,7,Pocillopora,Verrucosa,P ver 393,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+2,B,7,Pocillopora,Verrucosa,P ver 395,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+2,C,7,Pocillopora,Verrucosa,P ver 396,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+2,D,7,Pocillopora,Verrucosa,P ver 397,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+2,E,7,Pocillopora,Verrucosa,P ver 399,unknown,none,Osprey,Coral Sea,13.88078,146.5588
+3,A,1,Pocillopora,Verrucosa,P ver 135,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+3,B,1,Pocillopora,Verrucosa,P ver 136,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+3,C,1,Pocillopora,Verrucosa,P ver 138,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+3,D,1,Pocillopora,Verrucosa,P ver 139,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+3,E,1,Pocillopora,Verrucosa,P ver 140,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+3,F,1,Pocillopora,Verrucosa,P ver 141,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+3,G,1,Pocillopora,Verrucosa,P ver 144,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+3,H,1,Pocillopora,Verrucosa,P ver 145,unknown,none,Flinders,Coral Sea,17.71357,148.43713
+3,A,2,Pocillopora,Verrucosa,P ver 160,unknown,none,Herald,Coral Sea,16.94348,149.18565
+3,B,2,Pocillopora,Verrucosa,P ver 161,unknown,none,Herald,Coral Sea,16.94348,149.18565
+3,C,2,Pocillopora,Verrucosa,P ver 164,unknown,none,Herald,Coral Sea,16.94348,149.18565
+3,D,2,Pocillopora,Verrucosa,P ver 165,unknown,none,Herald,Coral Sea,16.94348,149.18565
+3,E,2,Pocillopora,Verrucosa,P ver 166,unknown,none,Herald,Coral Sea,16.94348,149.18565
+3,F,2,Pocillopora,Verrucosa,P ver 201,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+3,G,2,Pocillopora,Verrucosa,P ver 202,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+3,H,2,Pocillopora,Verrucosa,P ver 204,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+3,A,3,Pocillopora,Verrucosa,P ver 206,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+3,B,3,Pocillopora,Verrucosa,P ver 207,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+3,C,3,Pocillopora,Verrucosa,P ver 208,unknown,none,Lihou,Coral Sea,17.59707,151.48956
+3,D,3,Pocillopora,Verrucosa,P ver 365,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+3,E,3,Pocillopora,Verrucosa,P ver 366,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+3,F,3,Pocillopora,Verrucosa,P ver 368,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+3,G,3,Pocillopora,Verrucosa,P ver 369,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+3,H,3,Pocillopora,Verrucosa,P ver 378,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+3,A,4,Pocillopora,Verrucosa,P ver 379,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+3,B,4,Pocillopora,Verrucosa,P ver 380,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+3,C,4,Pocillopora,Verrucosa,P ver 383,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+3,D,4,Pocillopora,Verrucosa,P ver 384,unknown,none,Bougainville,Coral Sea,15.49273,147.08638
+3,E,4,Pocillopora,Verrucosa,P ver 228,unknown,none,Willis,Coral Sea,16.28728,149.9593
+3,F,4,Pocillopora,Verrucosa,P ver 230,unknown,none,Willis,Coral Sea,16.28728,149.9593
+3,G,4,Pocillopora,Verrucosa,P ver 231,unknown,none,Willis,Coral Sea,16.28728,149.9593
+3,H,4,Pocillopora,Verrucosa,P ver 235,unknown,none,Willis,Coral Sea,16.28728,149.9593
+3,A,5,Pocillopora,Verrucosa,P ver 241,unknown,none,Willis,Coral Sea,16.28728,149.9593
+3,B,5,Pocillopora,Verrucosa,P ver 242,unknown,none,Willis,Coral Sea,16.28728,149.9593
+3,C,5,Pocillopora,Verrucosa,P ver 243,unknown,none,Willis,Coral Sea,16.28728,149.9593
+3,D,5,Pocillopora,Verrucosa,P ver 303,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+3,E,5,Pocillopora,Verrucosa,P ver 307,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+3,F,5,Pocillopora,Verrucosa,P ver 308,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+3,G,5,Pocillopora,Verrucosa,P ver 309,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+3,H,5,Pocillopora,Verrucosa,P ver 310,unknown,none,Holmes,Coral Sea,16.5045,147.99681
+3,A,6,Pocillopora,Verrucosa,Mantis_Pver_20,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,B,6,Pocillopora,Verrucosa,Mantis_Pver_22,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,C,6,Pocillopora,Verrucosa,Mantis_Pver_26,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,D,6,Pocillopora,Verrucosa,Mantis_Pver_28,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,E,6,Pocillopora,Verrucosa,Mantis_Pver_30,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,F,6,Pocillopora,Verrucosa,Mantis_Pver_34,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,G,6,Pocillopora,Verrucosa,Mantis_Pver_38,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,H,6,Pocillopora,Verrucosa,Mantis_Pver_2,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,A,7,Pocillopora,Verrucosa,Mantis_Pver_4,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,B,7,Pocillopora,Verrucosa,Mantis_Pver_6,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,C,7,Pocillopora,Verrucosa,Mantis_Pver_8,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,D,7,Pocillopora,Verrucosa,Mantis_Pver_10,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,E,7,Pocillopora,Verrucosa,Mantis_Pver_12,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,F,7,Pocillopora,Verrucosa,Mantis_Pver_14,unknown,none,Mantis,CapeGrenville,12.33836,143.86078
+3,G,7,Pocillopora,Verrucosa,Mantis_Pver_16,unknown,none,Mantis,CapeGrenville,12.33836,143.86078

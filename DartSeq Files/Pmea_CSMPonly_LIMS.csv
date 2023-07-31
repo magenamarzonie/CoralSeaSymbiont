@@ -1,0 +1,128 @@
+﻿PlateID,Row,Column,Organism,Species,id,Tissue,Comments,QC,pop,Region,Subregion,lat,lon
+1,A,1,Pocillopora,Meandrina,P ver 001,unknown,none,Pass,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,B,1,Pocillopora,Meandrina,P ver 002,unknown,none,Downshift,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,C,1,Pocillopora,Meandrina,P ver 003,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,D,1,Pocillopora,Meandrina,P ver 004,unknown,none,Pass,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,E,1,Pocillopora,Meandrina,P ver 005,unknown,none,Downshift,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,F,1,Pocillopora,Meandrina,P ver 006,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,G,1,Pocillopora,Meandrina,P ver 008,unknown,none,Pass,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,H,1,Pocillopora,Meandrina,P ver 009,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,A,2,Pocillopora,Meandrina,P ver 010,unknown,none,Downshift,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,B,2,Pocillopora,Meandrina,P ver 011,unknown,none,Downshift,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,C,2,Pocillopora,Meandrina,P ver 013,unknown,none,Downshift,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,D,2,Pocillopora,Meandrina,P ver 014,unknown,none,Pass,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+1,E,2,Pocillopora,Meandrina,P ver 029,unknown,none,Pass,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+1,F,2,Pocillopora,Meandrina,P ver 031,unknown,none,Pass,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+1,G,2,Pocillopora,Meandrina,P ver 035,unknown,none,Pass,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+1,H,2,Pocillopora,Meandrina,P ver 037,unknown,none,Pass,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+1,A,3,Pocillopora,Meandrina,P ver 039,unknown,none,Fail,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+1,B,3,Pocillopora,Meandrina,P ver 042,unknown,none,Downshift,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+1,C,3,Pocillopora,Meandrina,P ver 043,unknown,none,Pass,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+1,D,3,Pocillopora,Meandrina,P ver 347,unknown,none,Pass,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+1,E,3,Pocillopora,Meandrina,P ver 358,unknown,none,Pass,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+1,F,3,Pocillopora,Meandrina,P ver 361,unknown,none,Pass,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+1,G,3,Pocillopora,Meandrina,P ver 367,unknown,none,Pass,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+1,H,3,Pocillopora,Meandrina,P ver 371,unknown,none,Pass,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+1,A,4,Pocillopora,Meandrina,P ver 055,unknown,none,Pass,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+1,B,4,Pocillopora,Meandrina,P ver 056,unknown,none,Downshift,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+1,C,4,Pocillopora,Meandrina,P ver 057,unknown,none,Pass,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+1,D,4,Pocillopora,Meandrina,P ver 059,unknown,none,Downshift,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+1,E,4,Pocillopora,Meandrina,P ver 060,unknown,none,Fail,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+1,F,4,Pocillopora,Meandrina,P ver 061,unknown,none,Downshift,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+1,G,4,Pocillopora,Meandrina,P ver 082,unknown,none,Pass,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+1,H,4,Pocillopora,Meandrina,P ver 084,unknown,none,Pass,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+1,A,5,Pocillopora,Meandrina,P ver 091,unknown,none,Downshift,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+1,B,5,Pocillopora,Meandrina,P ver 092,unknown,none,Pass,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+1,C,5,Pocillopora,Meandrina,P ver 095,unknown,none,Pass,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+1,D,5,Pocillopora,Meandrina,P ver 097,unknown,none,Pass,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+1,E,5,Pocillopora,Meandrina,P ver 284,unknown,none,Pass,Holmes,Coral Sea,Coral Sea,16.5045,147.99681
+1,F,5,Pocillopora,Meandrina,P ver 286,unknown,none,Pass,Holmes,Coral Sea,Coral Sea,16.5045,147.99681
+1,G,5,Pocillopora,Meandrina,P ver 290,unknown,none,Pass,Holmes,Coral Sea,Coral Sea,16.5045,147.99681
+1,H,5,Pocillopora,Meandrina,P ver 245,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,A,6,Pocillopora,Meandrina,P ver 246,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,B,6,Pocillopora,Meandrina,P ver 247,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,C,6,Pocillopora,Meandrina,P ver 248,unknown,none,Downshift,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,D,6,Pocillopora,Meandrina,P ver 249,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,E,6,Pocillopora,Meandrina,P ver 251,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,F,6,Pocillopora,Meandrina,P ver 252,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,G,6,Pocillopora,Meandrina,P ver 253,unknown,none,Fail,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,H,6,Pocillopora,Meandrina,P ver 254,unknown,none,Downshift,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,A,7,Pocillopora,Meandrina,P ver 255,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+1,B,7,Pocillopora,Meandrina,P ver 167,unknown,none,Pass,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+1,C,7,Pocillopora,Meandrina,P ver 168,unknown,none,Downshift,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+1,D,7,Pocillopora,Meandrina,P ver 169,unknown,none,Pass,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+1,E,7,Pocillopora,Meandrina,P ver 170,unknown,none,Pass,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+1,F,7,Pocillopora,Meandrina,P ver 171,unknown,none,Downshift,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+1,G,7,Pocillopora,Meandrina,P ver 221,unknown,none,Pass,Willis,Coral Sea,Coral Sea,16.28728,149.9593
+1,H,7,Pocillopora,Meandrina,P ver 232,unknown,none,Pass,Willis,Coral Sea,Coral Sea,16.28728,149.9593
+1,A,8,Pocillopora,Meandrina,P ver 233,unknown,none,Pass,Willis,Coral Sea,Coral Sea,16.28728,149.9593
+1,B,8,Pocillopora,Meandrina,P ver 234,unknown,none,Pass,Willis,Coral Sea,Coral Sea,16.28728,149.9593
+2,A,1,Pocillopora,Meandrina,P ver 015,unknown,none,Pass,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,B,1,Pocillopora,Meandrina,P ver 016,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,C,1,Pocillopora,Meandrina,P ver 017,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,D,1,Pocillopora,Meandrina,P ver 019,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,E,1,Pocillopora,Meandrina,P ver 020,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,F,1,Pocillopora,Meandrina,P ver 022,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,G,1,Pocillopora,Meandrina,P ver 023,unknown,none,Pass,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,H,1,Pocillopora,Meandrina,P ver 024,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,A,2,Pocillopora,Meandrina,P ver 025,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,B,2,Pocillopora,Meandrina,P ver 026,unknown,none,Fail,Saumarez,Coral Sea,Coral Sea,21.88607,153.64764
+2,C,2,Pocillopora,Meandrina,P ver 044,unknown,none,Pass,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+2,D,2,Pocillopora,Meandrina,P ver 047,unknown,none,Fail,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+2,E,2,Pocillopora,Meandrina,P ver 048,unknown,none,Fail,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+2,F,2,Pocillopora,Meandrina,P ver 049,unknown,none,Fail,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+2,G,2,Pocillopora,Meandrina,P ver 051,unknown,none,Fail,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+2,H,2,Pocillopora,Meandrina,P ver 054,unknown,none,Fail,Wreck,Coral Sea,Coral Sea,22.19267,155.33405
+2,A,3,Pocillopora,Meandrina,P ver 372,unknown,none,Pass,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+2,B,3,Pocillopora,Meandrina,P ver 373,unknown,none,Downshift,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+2,C,3,Pocillopora,Meandrina,P ver 376,unknown,none,Downshift,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+2,D,3,Pocillopora,Meandrina,P ver 381,unknown,none,Pass,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+2,E,3,Pocillopora,Meandrina,P ver 382,unknown,none,Pass,Bougainville,Coral Sea,Coral Sea,15.49273,147.08638
+2,F,3,Pocillopora,Meandrina,P ver 062,unknown,none,Fail,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+2,G,3,Pocillopora,Meandrina,P ver 064,unknown,none,Fail,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+2,H,3,Pocillopora,Meandrina,P ver 065,unknown,none,Downshift,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+2,A,4,Pocillopora,Meandrina,P ver 066,unknown,none,Pass,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+2,B,4,Pocillopora,Meandrina,P ver 067,unknown,none,Pass,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+2,C,4,Pocillopora,Meandrina,P ver 072,unknown,none,Downshift,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+2,D,4,Pocillopora,Meandrina,P ver 074,unknown,none,Downshift,Frederick,Coral Sea,Coral Sea,21.0113,154.35043
+2,E,4,Pocillopora,Meandrina,P ver 104,unknown,none,Downshift,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+2,F,4,Pocillopora,Meandrina,P ver 105,unknown,none,Downshift,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+2,G,4,Pocillopora,Meandrina,P ver 107,unknown,none,Downshift,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+2,H,4,Pocillopora,Meandrina,P ver 108,unknown,none,Fail,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+2,A,5,Pocillopora,Meandrina,P ver 112,unknown,none,Pass,Marion,Coral Sea,Coral Sea,18.98541,152.34488
+2,B,5,Pocillopora,Meandrina,P ver 291,unknown,none,Pass,Holmes,Coral Sea,Coral Sea,16.5045,147.99681
+2,C,5,Pocillopora,Meandrina,P ver 304,unknown,none,Downshift,Holmes,Coral Sea,Coral Sea,16.5045,147.99681
+2,D,5,Pocillopora,Meandrina,P ver 305,unknown,none,Fail,Holmes,Coral Sea,Coral Sea,16.5045,147.99681
+2,E,5,Pocillopora,Meandrina,P ver 306,unknown,none,Pass,Holmes,Coral Sea,Coral Sea,16.5045,147.99681
+2,F,5,Pocillopora,Meandrina,P ver 258,unknown,none,Fail,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+2,G,5,Pocillopora,Meandrina,P ver 260,unknown,none,Fail,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+2,H,5,Pocillopora,Meandrina,P ver 265,unknown,none,Fail,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+2,A,6,Pocillopora,Meandrina,P ver 266,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+2,B,6,Pocillopora,Meandrina,P ver 271,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+2,C,6,Pocillopora,Meandrina,P ver 273,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+2,D,6,Pocillopora,Meandrina,P ver 275,unknown,none,Pass,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+2,E,6,Pocillopora,Meandrina,P ver 276,unknown,none,Fail,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+2,F,6,Pocillopora,Meandrina,P ver 277,unknown,none,Downshift,Moore,Coral Sea,Coral Sea,15.89218,149.15359
+2,G,6,Pocillopora,Meandrina,P ver 172,unknown,none,Fail,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+2,H,6,Pocillopora,Meandrina,P ver 173,unknown,none,Downshift,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+2,A,7,Pocillopora,Meandrina,P ver 174,unknown,none,Pass,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+2,B,7,Pocillopora,Meandrina,P ver 179,unknown,none,Downshift,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+2,C,7,Pocillopora,Meandrina,P ver 182,unknown,none,Downshift,Chilcott,Coral Sea,Coral Sea,16.9315,149.98988
+2,D,7,Pocillopora,Meandrina,P ver 236,unknown,none,Fail,Willis,Coral Sea,Coral Sea,16.28728,149.9593
+2,E,7,Pocillopora,Meandrina,P ver 237,unknown,none,Pass,Willis,Coral Sea,Coral Sea,16.28728,149.9593
+2,F,7,Pocillopora,Meandrina,P ver 238,unknown,none,Fail,Willis,Coral Sea,Coral Sea,16.28728,149.9593
+2,G,7,Pocillopora,Meandrina,P ver 239,unknown,none,Downshift,Willis,Coral Sea,Coral Sea,16.28728,149.9593
+2,H,7,Pocillopora,Meandrina,P ver 240,unknown,none,Fail,Willis,Coral Sea,Coral Sea,16.28728,149.9593
+2,A,8,Pocillopora,Meandrina,Corb_Pver_1,unknown,none,Pass,Corbett,GBR,PCB,13.92266,144.24052
+2,B,8,Pocillopora,Meandrina,Corb_Pver_10,unknown,none,Fail,Corbett,GBR,PCB,13.92266,144.24052
+2,C,8,Pocillopora,Meandrina,Corb_Pver_11,unknown,none,Pass,Corbett,GBR,PCB,13.92266,144.24052
+2,D,8,Pocillopora,Meandrina,Corb_Pver_12,unknown,none,Pass,Corbett,GBR,PCB,13.92266,144.24052
+2,E,8,Pocillopora,Meandrina,Corb_Pver_13,unknown,none,Pass,Corbett,GBR,PCB,13.92266,144.24052
+2,F,8,Pocillopora,Meandrina,Corb_Pver_15,unknown,none,Fail,Corbett,GBR,PCB,13.92266,144.24052
+2,G,8,Pocillopora,Meandrina,Corb_Pver_18,unknown,none,Pass,Corbett,GBR,PCB,13.92266,144.24052
+2,H,8,Pocillopora,Meandrina,Corb_Pver_20,unknown,none,Pass,Corbett,GBR,PCB,13.92266,144.24052
+2,A,9,Pocillopora,Meandrina,Corb_Pver_25,unknown,none,Pass,Corbett,GBR,PCB,13.92266,144.24052
+2,B,9,Pocillopora,Meandrina,Corb_Pver_26,unknown,none,Pass,Corbett,GBR,PCB,13.92266,144.24052
+2,C,9,Pocillopora,Meandrina,Corb_Pver_33,unknown,none,Pass,Corbett,GBR,PCB,13.92266,144.24052
+2,D,9,Pocillopora,Meandrina,Corb_Pver_6,unknown,none,Fail,Corbett,GBR,PCB,13.92266,144.24052
+2,E,9,Pocillopora,Meandrina,Corb_Pver_9,unknown,none,Fail,Corbett,GBR,PCB,13.92266,144.24052
