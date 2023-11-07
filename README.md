@@ -14,7 +14,7 @@ Other files needed to run scripts> <br>
 
 **O_SymPortal** folder contains post-med sequence analysis of symbiont DIVs and Type Profiles which are required to run 1_Analysis <br>
 
-**HostAdmix** folder contains .Rdata files for running any code containing the host Dart-sequencing data. This folder is needed to run 1_Analysis scripts. <br>
+**HostAdmix** folder contains .Rdata files for running any code containing the host Dart-sequencing data. (4) Rmd files are contained with each host species. This folder is needed to run 1_Analysis scripts. <br>
 
 **Metadata.csv** contains environmental and host species data associated with each sample. Note that 'Vial' refers to each coral individual sample collected <br>
 
