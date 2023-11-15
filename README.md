@@ -18,7 +18,7 @@ Other files needed to run scripts> <br>
 
 **Metadata.csv** contains environmental and host species data associated with each sample. Note that 'Vial' refers to each coral individual sample collected <br>
 
-**Metadata.csv** contains environmental and host species data associated with each sample, with updated mtORF alignment. Both metadata files are required for 1_Analysis. Note that 'Vial' refers to each coral individual sample collected <br>
+**Metadata_mtorf.csv** contains environmental and host species data associated with each sample, with updated mtORF alignment. Both metadata files are required for 1_Analysis. Note that 'Vial' refers to each coral individual sample collected <br>
 
 **psba txt files** are required to run the marker alignment 
 
