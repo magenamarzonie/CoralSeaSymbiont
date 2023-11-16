@@ -1,0 +1,334 @@
+---
+title: "2_Procrustes"
+output: html_document
+date: "2023-05-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#1.1 Load libraries
+```{r, include=FALSE}
+library(dartR)
+library(adegenet)
+library(poppr)
+library(hierfstat)
+library(reshape2)
+library(ggplot2)
+library(RColorBrewer)
+library(scales)
+library(dplyr)
+```
+
+
+```{r, include = FALSE}
+#load SNP data and metadata 
+#gl <- gl.read.dart(filename = "Report_DPoc22-7156_SNP_mapping_2.csv", covfilename = "Pver_CSMPonly_LIMS.csv")
+
+#drop indviduals and population that do not match dataset 
+#gl <- gl.drop.ind(gl, 
+      # ind.list =c('P ver 282', 'P ver 285', 'P ver 130', 'P ver 149', 'P ver 126', 'P ver 379'))
+
+#gl.pver <- gl.drop.pop(gl, 
+               #   pop.list = "Mantis")
+
+#m <- as.matrix(gl.pver)
+
+#save(gl.pver, file = "gl.pver.RData")
+
+```
+
+
+#1.2 Load SNP data 
+```{r}
+#load data from above 
+load("gl.pver.RData")
+
+#filter to gl3 parameters for the csmp subset. 
+gl <- gl.filter.secondaries(gl.pver)
+nLoc(gl)
+
+#filter loci with reproducibility below a particular threshold
+gl.report.reproducibility(gl)
+gl <- gl.filter.reproducibility(gl, threshold = 0.98)
+
+nLoc(gl)
+
+#filter loci with >5% missing data. this is standard. Note that this is different call rate filter to the regional based on we are only looking at Coral Sea here 
+gl2 <- gl.filter.callrate(gl, method = "loc", threshold = 0.80)
+nLoc(gl2)
+
+
+gl.report.callrate(gl2)
+
+#filter read depth < 5x
+gl2 <- gl.filter.rdepth(gl2, lower = 5, upper = 200, verbose = 3)
+nLoc(gl2)
+
+```
+
+#1.3 MAF filtering 
+```{r}
+#We will filter out loci with a MAF less than 0.05.**
+gl3.csmp.pver <- gl.filter.maf(gl2, threshold = 0.95) 
+
+#report for MAF after filtering with MAF < 0.05 
+gl.report.maf(gl3.csmp.pver)
+nLoc(gl3.csmp.pver)
+#1951 SNPs remaining 
+
+gl3.csmp.pver <- gl.impute(
+  gl3.csmp.pver,
+  method = "neighbour",
+  fill.residual = TRUE,
+  parallel = FALSE,
+  verbose = NULL
+)
+
+nInd(gl3.csmp.pver)
+
+#save(gl3.csmp.pmea, file = "gl3.csmp.pmea.RData")
+
+list.pver <- indNames(gl3.csmp.pver)
+#save(list.pver, file = "list.pver.RData")
+
+#save(gl3.csmp.pver, file = "gl3.csmp.pver.RData")
+```
+
+
+
+#1.4 Convert to genlight 
+```{r}
+#converting a genlight object (we have) to a genind object so we can look at genetic data at an individual data using adegenet package. 
+pver_gen <- gl2gi(gl3.csmp.pver, probar = FALSE, verbose = NULL)
+pver_gen
+
+#// 148 individuals; 3,270 loci; 6,540 alleles; size: 35 Mb
+
+is.genind(pver_gen)
+```
+
+
+
+#1.5 Check monomorphic loci 
+```{r}
+#check that loci are still polymorphic after filtering. Retaining monomorphic loci unnecessarily increases the size of the dataset and will affect some calculations.
+
+isPoly(pver_gen) %>% summary
+
+#remove loci that are not polymorphic 
+
+poly_loci = names(which(isPoly(pver_gen) == TRUE))
+pver_gen = pver_gen[loc = poly_loci]
+isPoly(pver_gen) %>% summary
+```
+
+#2.1 Build PCA model 
+```{r}
+x = tab(pver_gen, NA.method = "mean")
+
+# Perform PCA
+pca1 = dudi.pca(x, scannf = FALSE, scale = FALSE, nf = 3)
+
+# Analyse how much percent of genetic variance is explained by each axis
+percent = pca1$eig/sum(pca1$eig)*100
+barplot(percent, ylab = "Genetic variance explained by eigenvectors (%)", ylim = c(0,12),
+        names.arg = round(percent, 1))
+```
+
+
+#2.2 PCA coord dataframe 
+```{r}
+# Create a data.frame containing individual coordinates
+ind_coords = as.data.frame(pca1$li) 
+
+# Rename columns of dataframe
+colnames(ind_coords) = c("Axis1","Axis2","Axis3")
+
+# Add a column containing individuals
+ind_coords$Ind = indNames(pver_gen)
+
+# Add a column with the site IDs
+ind_coords$Site = pver_gen$pop
+
+# Calculate centroid (average) position for each population
+centroid = aggregate(cbind(Axis1, Axis2, Axis3) ~ Site, data = ind_coords, FUN = mean)
+
+# Add centroid coordinates to ind_coords dataframe
+ind_coords = left_join(ind_coords, centroid, by = "Site", suffix = c("",".cen"))
+
+# Define colour palette
+cols = brewer.pal(nPop(pver_gen), "Set3")
+
+# Custom x and y labels
+xlab = paste("Axis 1 (", format(round(percent[1], 1), nsmall=1)," %)", sep="")
+ylab = paste("Axis 2 (", format(round(percent[2], 1), nsmall=1)," %)", sep="")
+```
+
+
+#2.3 Load PCA metadata 
+```{r}
+load("meta_pver.RData")
+
+pver_meta <- meta_pver %>% 
+  tibble::rownames_to_column(var = "Ind") %>% 
+  dplyr::select(c(Ind, Reef)) 
+
+ind_coords.pver <- ind_coords %>% left_join(pver_meta) %>% 
+  mutate(Reef = as.factor(Reef))
+
+```
+
+
+#2.4 Theme for PCA
+```{r}
+theme_PCA <-theme(aspect.ratio = 3/5) +
+  theme(axis.line = element_blank()) +
+  theme(plot.background = element_blank(),
+    panel.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) +
+ theme(panel.border = element_rect(colour = "black", fill=NA, linewidth=1))
+```
+
+#2.5 Plot PCA by sector
+```{r}
+ind_coords.pver
+
+ind_coords.pver <- ind_coords.pver %>% mutate(Site = factor(Site, levels = c("Osprey","Bougainville", "Moore", "Willis", "Holmes", "Herald", "Lihou", "Flinders", "Marion", "Wreck")))
+
+PCA_pver <- ind_coords.pver %>% 
+  ggplot(aes(Axis1, Axis2, fill = Site)) +
+  geom_point(alpha = 1, shape = 21, size = 2) + 
+#  scale_fill_manual(values = ) +
+  labs(x = xlab, y = ylab) +
+  theme_PCA
+
+PCA_pver
+#save 6 by 4 in dimensions
+
+#save(ind_coords.pver, file = "ind_coords.pver.RData")
+```
+
+
+
+#3.1 Admixture plots 
+```{r}
+library(LEA)
+## Here we are moving on to the LEA package in order to estimate K clusters and create admixture plots 
+
+gl2geno(gl3.csmp.pver, outfile = "gl_geno", outpath = getwd(), verbose = NULL)
+```
+
+#3.2 Plot variance 
+```{r, include = FALSE}
+pc = pca("gl_geno.lfmm", scale = TRUE)
+tw = tracy.widom(pc)
+
+#Plots the percentage of variance explained by eah component. You can look at the 'elbow' to inform the number of genetic clusers. It looks like ours is between 3-5.
+plot(tw$percentage, pch = 19, col = "darkblue", cex = .8)
+```
+
+
+#3.3 Run snmf algorithm
+```{r, include = FALSE}
+snmf1 = snmf("gl_geno.geno",
+        K = 1:10,    #number of K ancestral populations to run
+        entropy = TRUE,     #calculate cross-entropy
+        repetitions = 10,    #10 repetitions for each K
+        project = "new")
+
+plot(snmf1, col = "blue", cex = 1.5, pch = 19)
+```
+
+#3.4 Extract cross entropy
+```{r}
+# Extract the cross-entropy of all runs where K = 2
+ce = cross.entropy(snmf1, K = 2)
+ce
+
+lowest.ce = which.min(ce)
+lowest.ce
+```
+
+#3.5 Extract q-values 
+```{r}
+qmatrix = as.data.frame(Q(snmf1, K = 2, run = lowest.ce))
+head(qmatrix)
+
+# Label column names of qmatrix
+ncol(qmatrix)
+cluster_names = c()
+for (i in 1:ncol(qmatrix)){
+  cluster_names[i] = paste("Cluster", i)
+}
+cluster_names
+colnames(qmatrix) = cluster_names
+head(qmatrix)
+
+qmatrix
+
+# Add individual IDs
+qmatrix$Ind = indNames(pver_gen)
+
+#Add site IDs
+qmatrix$Site = pver_gen$pop
+head(qmatrix)
+
+#Convert dataframe to long format
+qlong = melt(qmatrix, id.vars=c("Ind","Site"))
+head(qlong)
+
+qlong.pver <- qlong %>% dplyr::filter(variable == "Cluster 1") %>% 
+    select(Ind, Admix1 = value)
+
+save(qlong.pver, file = "qlong.pver.RData")
+```
+
+
+#3.6 Admixture faceted by sector
+```{r}
+library(forcats)
+
+# Reorder factor levels within groups
+qlong <- qlong %>%
+  group_by(variable) %>%
+  mutate(Ind = fct_reorder(Ind, value, .desc = TRUE)) %>%
+  arrange(variable, Ind)
+
+qlong <- qlong %>% mutate(variable = factor(variable, levels = c("Cluster 1", "Cluster 2")))#%>% 
+ # mutate(variable = recode(variable, "Cluster 1" = "PVCL1", "Cluster 2" = "PVCL2"))
+
+# Relevel the "Site" variable
+qlong$Site <- forcats::fct_relevel(qlong$Site, "Osprey","Bougainville", "Moore", "Willis", "Holmes", "Herald", "Lihou", "Flinders", "Marion", "Wreck")
+
+# Relevel the "Ind" variable by the "Site" variable in the data frame
+qlong$Ind <- factor(qlong$Ind, levels = unique(qlong$Ind[order(qlong$Site)]))
+
+
+admix.fig <- ggplot(qlong, aes(x = Ind, y = value, fill = variable)) +
+  geom_col(color = "gray", linewidth = 0.1, width = 1) +
+  facet_grid(~ Site, scales = "free_x", space = "free_x", switch = "x") +
+  theme_minimal() +
+  scale_fill_manual(values = cols) +
+  labs(x = "Individual", y = "Admixture Proportion") +
+  scale_y_continuous(expand = c(0, 0)) +
+  scale_x_discrete(expand = c(0, 0)) +
+  theme(
+    panel.spacing.x = unit(0.1, "lines"),
+    panel.grid = element_blank(),
+    axis.text.x = element_blank(),
+    strip.text = element_text(colour = "black", size = 6),
+    panel.background = element_blank(),
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 8),
+    plot.margin = margin(t = 30, r = 10, b = 30, l = 10, unit = "mm"),
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5)
+  )
+
+admix.fig
+
+#saving as 5 x 10 pdf 
+```
