@@ -934,11 +934,11 @@ hclust_samps_acro %>%
   plot(main = "Group membership")
 
 
-grouplist_acro <- enframe(cu_acro) %>% 
+kvalue_acro <- enframe(cu_acro) %>% 
   dplyr::rename(kgroup = value) %>% 
   dplyr::rename(sample_name = name)
 
-#save(grouplist_acro, file = "Data/grouplist_acro.RData")
+save(kvalue_acro, file = "kvalue_acro.RData")
 #change value to k group. add to metadata 
 
 #k-group stats for acropora (k groups 1 and 2)
@@ -1608,8 +1608,9 @@ acro.admixPCA.C3 <- MDS.admix.acroC3 %>%
 acro.admixPCA.C3 
 ```
 
-### Fig SX PCA Admixture
+### Admixture figure 
 ```{r}
+#this shows how symbiont communities are structured by admixture, for each of the three host species. 
 PCA_admix <- pver.admixPCA  + pmea.admixPCA + acro.admixPCA.C3
 PCA_admix
 ```
@@ -1956,6 +1957,7 @@ save(snp.acro, file = "snp.acro.RData")
 ```{r}
 dbrda <- pmh8_fullrda + pver_fullrda + acro_fullrda 
 dbrda
+
 ```
 
 
@@ -2004,7 +2006,6 @@ meta = read.csv("Metadata.csv") %>%
 ```
 
 
-
 ## Load Kgroup clustering for symbiont genetics
 ```{r}
 poci_dend <- as.dendrogram(hclust_samps_poci)
@@ -2036,7 +2037,6 @@ acro_k <- data.frame(Vial = labels(acro_dend),
 
 k_map <- rbind(poci_k, acro_k)
 ```
-
 
 
 ## 6.1 P. meandrina Procrustes 
@@ -2981,6 +2981,8 @@ corrplot(cm)
 # Check the vif scores of the full model
 ord_pver_full <- dbrda(dist_pver_ordered ~ Lat + Long + MMM + Depth + catBleaching + DHW2020 + maxDHW + Admix1 + Kd_490, data = meta.pver.admix)
 
+
+
 sort(vif.cca(ord_pver_full))
 
 #catBleaching        Depth       Admix1       Kd_490      DHW2020       maxDHW 
@@ -3506,3 +3508,5 @@ prof.data.ahum <- prof.data.ahum %>%
 
 save(prof.data.ahum, file = "prof.data.ahum.RData")
 ```
+
+
