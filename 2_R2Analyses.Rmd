@@ -1,0 +1,304 @@
+---
+title: "2_R2analyses"
+output: html_document
+date: "2024-01-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+**Move these scripts over once you are finished** 
+
+#1. Neighbour Joining Trees
+
+##1.1NJ tree for P. meandrina 
+
+**Here we are making additional Neighbour Joining trees to show the individial genetic differences** 
+```{r}
+library(ggtree)
+```
+
+
+```{r}
+#need to use a distance matrix to get the NJ tree to work in package APE
+dart.pmea.tree
+pmea.tree <- nj(dart.pmea.tree)
+
+h_cluster_pmea <- hclust(dart.pmea.tree, method = "average", members = NULL) # method = average is used for UPGMA, members can be equal to NULL or a vector with a length of size D
+plot(h_cluster_pmea, cex = 0.6)
+
+plot_pmea <- ggtree(h_cluster_pmea)
+
+plot_pmea$data <- left_join(plot_pmea$data, ind_coords.pmea_admix, by = c("label" = "Ind"))
+
+plot_pmea + geom_tippoint(aes(colour = admix1))
+```
+
+
+##1.2 NJ tree for P. verrucosa 
+```{r}
+#need to use a distance matrix to get the NJ tree to work in package APE
+dart.pver.tree
+pver.tree <- nj(dart.pver.tree)
+
+h_cluster_pver <- hclust(dart.pver.tree, method = "average", members = NULL) # method = average is used for UPGMA, members can be equal to NULL or a vector with a length of size D
+plot(h_cluster_pver, cex = 0.6)
+
+plot_pver <- ggtree(h_cluster_pver)
+
+plot_pver$data <- left_join(plot_pver$data, ind_coords.pver_admix, by = c("label" = "Ind"))
+
+plot_pver + geom_tippoint(aes(colour = Admix1))
+```
+
+##1.3 NJ tree for A. humilis 
+```{r}
+#need to use a distance matrix to get the NJ tree to work in package APE
+dart.acro.tree
+acro.tree <- nj(dart.acro.tree)
+
+h_cluster_acro <- hclust(dart.acro.tree, method = "average", members = NULL) # method = average is used for UPGMA, members can be equal to NULL or a vector with a length of size D
+plot(h_cluster_acro, cex = 0.6)
+
+plot_acro <- ggtree(h_cluster_acro)
+
+plot_acro$data <- left_join(plot_acro$data, ind_coords.acro_admix, by = c("label" = "Ind"))
+
+plot_acro + geom_tippoint(aes(colour = value))
+```
+
+
+#2. Conditional Models
+
+##2.1a P. meandrina conditional environment
+```{r}
+# Make a correlation matrix of numeric variables
+cm <- cor(meta.pmea.admix %>% dplyr::select(Lat, Depth, maxDHW, DHW2020, Kd_490, Axis1, Axis2))
+
+#check correlations visually 
+corrplot(cm) 
+cm %>% cor()
+
+
+ord_pmh8_env <- dbrda(dist_pmh8_ordered ~  Lat + Depth + catBleaching + maxDHW + Kd_490 + DHW2020 + Condition(Axis1 + Axis2), data = meta.pmea.admix)
+
+sort(vif.cca(ord_pmh8_env)) 
+#  Axis2        Depth       maxDHW catBleaching        Axis1       Kd_490          Lat 
+ #   1.032328     1.136818     1.392320     1.437772     1.514188     2.233396     2.911031 
+
+ord_pmh8_back_env <- ordistep(ord_pmh8_env, direction = "backward", permutations = 999)
+anova(ord_pmh8_back_env, by = 'margin')
+
+R2adj <- RsquareAdj(ord_pmh8_env)$adj.r.squared
+R2adj
+
+#6.0% explained by enviro 
+```
+
+##2.2b P. meandrina conditional host 
+
+```{r}
+#here, we make conditional models where we account for host at the same time of looking at enviro and vice versa. 
+ord_pmh8_host <- dbrda(dist_pmh8_ordered ~ Axis1 + Axis2 + Condition(Lat + catBleaching + Kd_490), data = meta.pmea.admix)
+
+ord_pmh8_back_host <- ordistep(ord_pmh8_host, direction = "backward", permutations = 999)
+anova(ord_pmh8_back_host, by = 'margin')
+
+R2adj <- RsquareAdj(ord_pmh8_host)$adj.r.squared
+R2adj
+
+#14.9% explained by host 
+```
+
+
+##2.2a P. verrucosa conditional environment
+```{r}
+
+cm <- cor(meta.pmea.admix %>% dplyr::select(Lat, Depth, maxDHW, Kd_490, Axis1, Axis2))
+
+#check correlations visually 
+corrplot(cm) 
+cm %>% cor()
+
+#we don't put DHW2020 into this m
+ord_pver_env <- dbrda(dist_pver_ordered ~ Lat + Depth + catBleaching + maxDHW + Kd_490 + Condition (Axis1 + Axis2), data = meta.pver.admix)
+
+sort(vif.cca(ord_pver_env)) 
+#  Axis2        Depth catBleaching        Axis1       maxDHW       Kd_490          Lat      DHW2020 
+  #  1.052384     1.071270     1.117271     1.276917     1.486963     2.008457     2.852418     3.131774 
+
+ord_pver_back_env <- ordistep(ord_pver_env, direction = "backward", permutations = 999)
+anova(ord_pver_back_env, by = 'margin')
+
+R2adj <- RsquareAdj(ord_pver_env)$adj.r.squared
+R2adj
+
+#1.3% explained by enviroment 
+```
+
+##2.2b P. verrucosa conditional host 
+
+```{r}
+#here, we make conditional models where we account for host at the same time of looking at enviro and vice versa. 
+ord_pver_host <- dbrda(dist_pver_ordered ~ Axis1 + Axis2 + Condition(DHW2020 + Kd_490 + Depth + Lat), data = meta.pver.admix)
+
+ord_pver_back_host <- ordistep(ord_pver_host, direction = "backward", permutations = 999)
+anova(ord_pver_back_host, by = 'margin')
+
+R2adj <- RsquareAdj(ord_pver_host)$adj.r.squared
+R2adj
+
+#3.4% explained by host 
+```
+
+
+
+##2.3a A. humilis conditional enviro model 
+```{r}
+cm <- cor(meta.acro.admix %>% dplyr::select(Lat, Depth, maxDHW, DHW2020, Kd_490, Axis1, Axis2))
+
+#check correlations visually 
+corrplot(cm) 
+cm %>% cor()
+
+ord_acro_env <- dbrda(dist_acro_ordered ~  Lat +  Depth + catBleaching + DHW2020 + maxDHW + Kd_490 + Condition(Axis1 + Axis2), data = meta.acro.admix)
+
+sort(vif.cca(ord_acro_env)) 
+#Axis2        Axis1 catBleaching        Depth       Kd_490       maxDHW          Lat      DHW2020 
+   # 1.113693     1.228430     1.254785     1.288612     1.616941     1.983151     4.222961     4.242846
+
+ord_acro_back_env <- ordistep(ord_acro_env, direction = "backward", permutations = 999)
+anova(ord_acro_back_env, by = 'margin')
+
+R2adj <- RsquareAdj(ord_acro_env)$adj.r.squared
+R2adj 
+
+#14.9% explained by environment vs. 0.2% by host 
+```
+
+
+##2.3b A. humilis conditional host model 
+```{r}
+ord_acro_host <- dbrda(dist_acro_ordered ~  Axis1 + Axis2 + Condition(Lat +  Depth + catBleaching + DHW2020 + maxDHW + Kd_490), data = meta.acro.admix)
+
+ord_acro_back_host <- ordistep(ord_acro_host, direction = "backward", permutations = 999)
+anova(ord_acro_back_host, by = 'margin')
+
+R2adj <- RsquareAdj(ord_acro_host)$adj.r.squared
+R2adj 
+```
+
+##2.4a A. humilis Cluster 1 conditional model (environment)
+```{r}
+ord_acroC3_env <- dbrda(dist_acroC3_ordered ~ Lat +  Depth + catBleaching + DHW2020 + maxDHW + Kd_490 , data = meta.acroC3.admix)
+
+ord_acro_back_C3 <- ordistep(ord_acroC3_env, direction = "backward", permutations = 999)
+anova(ord_acro_back_C3, by = 'margin')
+```
+
+
+
+#3.1 P. meandrina new dbRDA 
+```{r}
+#extract dbRDA scores
+pmh8_scores <- as.data.frame(scores(ord_pmh8_back_env, display = "sites")) %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta_pmh8)
+
+#extract dbRDA vectors
+pmh8_vectors <- as.data.frame(ord_pmh8_back_env$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+pmh8_fullrda <- pmh8_scores %>%
+  mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = Lat), size = 3, shape = 21) +
+      geom_label_repel(data = pmh8_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.75, size = 4, segment.colour = NA) +
+      geom_segment(data = pmh8_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+        theme(aspect.ratio = 1, text = element_text(size = 15)) +
+      scale_fill_viridis_c(option = "magma", direction = -1, guide = guide_colorbar(reverse = TRUE)) +
+  theme(legend.position = "none") +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) 
+     #edit legends
+
+
+pmh8_fullrda
+```
+
+
+#3.2 P. verrucosa new dbRDA
+```{r}
+#extract dbRDA scores
+pver_scores <- as.data.frame(scores(ord_pver_back_env, display = "sites")) %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta_pver)
+
+#extract dbRDA vectors
+pver_vectors <- as.data.frame(ord_pver_back_env$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+pver_fullrda <- pver_scores %>%
+  mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = Lat), size = 3, shape = 21) +
+      geom_label_repel(data = pver_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.75, size = 4, segment.colour = NA) +
+      geom_segment(data = pver_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+        theme(aspect.ratio = 1, text = element_text(size = 15)) +
+      scale_fill_viridis_c(option = "magma", direction = -1, guide = guide_colorbar(reverse = TRUE)) +
+  theme(legend.position = "none") +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) 
+     #edit legends
+
+
+pver_fullrda
+```
+
+
+# A. humilis new dbRDA 
+```{r}
+#extract dbRDA scores
+acro_scores <- as.data.frame(scores(ord_acro_back_env, display = "sites")) %>%
+  tibble::rownames_to_column(var = "Vial") %>%
+  left_join(., meta_acro) %>% 
+  drop_na()  #dropping a few values that were from the outliers in the previous RDA before filtering for host genetics. 
+
+#extract dbRDA vectors
+acro_vectors <- as.data.frame(ord_acro_back_env$CCA$biplot) %>%
+  tibble::rownames_to_column(var = "factors")
+
+#produce dbRDA plot 
+acro_fullrda <- acro_scores %>%
+  mutate(Reef = fct_relevel(Reef, reef_order)) %>%
+    ggplot(aes(x = dbRDA1, y = dbRDA2)) +
+      geom_point(aes(fill = Lat), size = 3, shape = 21) +
+      geom_label_repel(data = acro_vectors, aes(x = dbRDA1, y = dbRDA2, label = factors), box.padding = 0.75, size = 4, segment.colour = NA) +
+      geom_segment(data = acro_vectors, aes(x = 0, xend = dbRDA1, y = 0, yend = dbRDA2), 
+      size = 0.5, arrow = arrow(length = unit(0.5, "cm")), colour = "royalblue2") +
+        theme(aspect.ratio = 1, text = element_text(size = 15)) +
+      scale_fill_viridis_c(option = "magma", direction = -1, guide = guide_colorbar(reverse = TRUE)) +
+     theme(legend.position = "right") +
+  theme(plot.background = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_blank()) 
+     #edit legends
+
+
+acro_fullrda
+```
+
+
+```{r}
+pmh8_fullrda + pver_fullrda + acro_fullrda
+#saving as 8 x 10 dim
+```
+
